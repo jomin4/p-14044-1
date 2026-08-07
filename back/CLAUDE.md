@@ -34,7 +34,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 기술 스택
 
-- **Kotlin 2.3.21** (main) / **Java 25** / **Spring Boot 4.1.0**
+- **Kotlin 2.3.21** (main) / **Java 21** (툴체인 — 배포용 Docker 베이스 이미지와 맞춤) / **Spring Boot 4.1.0**
 - **주의**: 프로덕션 코드는 Kotlin (`src/main/kotlin`), 테스트 코드는 Java (`src/test/java`)로 작성됨
 - **Gradle 9.5.1** (Kotlin DSL), allOpen 플러그인으로 JPA 엔티티 open 처리
 - **H2** 데이터베이스 (MySQL 모드)
