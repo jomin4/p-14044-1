@@ -40,11 +40,21 @@ dependencies {
     // H2 Console
     implementation("org.springframework.boot:spring-boot-h2console")
 
+    // 운영: 헬스체크 (19강 Blue/Green 전환 판정에 사용)
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+
+    // 운영: 캐시 + 세션 저장소 (컨테이너가 바뀌어도 로그인 세션 유지)
+    // Boot 4 에서는 캐시 자동설정이 별도 모듈이라 @EnableCaching 만으로는 CacheManager 가 없다
+    implementation("org.springframework.boot:spring-boot-starter-cache")
+    implementation("org.springframework.boot:spring-boot-starter-data-redis")
+    implementation("org.springframework.boot:spring-boot-starter-session-data-redis")
+
     // OpenAPI / Swagger
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3")
 
     // Database
     runtimeOnly("com.h2database:h2")
+    runtimeOnly("com.mysql:mysql-connector-j")
 
     // Dev
     developmentOnly("org.springframework.boot:spring-boot-devtools")

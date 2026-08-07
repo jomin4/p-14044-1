@@ -1,4 +1,5 @@
 server:
+  port: 8080
   forward-headers-strategy: native
 spring:
   config:
@@ -15,6 +16,7 @@ spring:
       auto-commit: false
   jpa:
     show-sql: true
+    open-in-view: false
     hibernate:
       ddl-auto: update
     properties:
@@ -59,6 +61,17 @@ spring:
             user-name-attribute: response
 springdoc:
   default-produces-media-type: application/json;charset=UTF-8
+management:
+  endpoints:
+    web:
+      base-path: /actuator          # 기본값이지만 명시
+      exposure:
+        include: health,info        # 필요시 metrics 등 추가
+  endpoint:
+    health:
+      probes:
+        enabled: true               # /actuator/health/{liveness,readiness} 활성화
+      show-details: never           # 프로브 용도면 never 권장(민감정보 차단)
 logging:
   level:
     com.back: DEBUG
@@ -66,6 +79,20 @@ logging:
     org.hibernate.orm.jdbc.extract: TRACE
     org.springframework.transaction.interceptor: TRACE
 custom:
+  dev:
+    cookieDomain: localhost
+    frontUrl: "http://${custom.dev.cookieDomain}:3000"
+    backUrl: "http://${custom.dev.cookieDomain}:${server.port}"
+  prod:
+    cookieDomain: jomin4.cloud
+    frontUrl: "https://www.${custom.prod.cookieDomain}"
+    backUrl: "https://api.${custom.prod.cookieDomain}"
+  site:
+    # 기본은 개발용. 운영에서는 application-prod.yaml 이 prod 값으로 덮어쓴다
+    cookieDomain: "${custom.dev.cookieDomain}"
+    frontUrl: "${custom.dev.frontUrl}"
+    backUrl: "${custom.dev.backUrl}"
+    name: p-14044-1
   jwt:
     secretKey: ${CUSTOM__JWT__SECRET_KEY}
   accessToken:

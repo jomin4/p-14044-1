@@ -2,6 +2,7 @@ package com.back.domain.member.member.entity
 
 import com.back.domain.member.member.repository.MemberAttrRepository
 import com.back.domain.member.member.repository.MemberRepository
+import com.back.global.app.AppConfig
 import com.back.global.jpa.entity.BaseEntity
 import com.back.global.jpa.entity.BaseTime
 import jakarta.persistence.Column
@@ -41,7 +42,7 @@ class BaseMember(
         }
 
     val redirectToProfileImgUrlOrDefault: String
-        get() = "http://localhost:8080/api/v1/members/${id}/redirectToProfileImg"
+        get() = "${AppConfig.siteBackUrl}/api/v1/members/${id}/redirectToProfileImg"
 
     val profileImgUrlOrDefault: String
         get() = profileImgUrl

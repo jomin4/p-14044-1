@@ -1,0 +1,13 @@
+build/
+.gradle/
+.kotlin/
+bin/
+out/
+.idea/
+.claude/
+*.iml
+db_dev.mv.db
+db_dev.trace.db
+db_dev.lock.db
+HELP.md
+CLAUDE.md

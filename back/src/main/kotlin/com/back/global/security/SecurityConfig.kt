@@ -1,5 +1,6 @@
 package com.back.global.security
 
+import com.back.global.app.AppConfig
 import com.back.global.rsData.RsData
 import com.back.standard.util.Ut
 import org.springframework.context.annotation.Bean
@@ -30,6 +31,8 @@ class SecurityConfig(
 
             // 요청 경로별 인가 설정
             authorizeHttpRequests {
+                // 헬스체크: 19강 Blue/Green 전환 판정에 쓰이므로 인증 없이 열어둔다
+                authorize("/actuator/**", permitAll)
                 authorize(HttpMethod.GET, "/api/*/posts", permitAll)
                 authorize(HttpMethod.GET, "/api/*/posts/{id:\\d+}", permitAll)
                 authorize(HttpMethod.GET, "/api/*/posts/{postId:\\d+}/comments", permitAll)
@@ -95,7 +98,7 @@ class SecurityConfig(
     @Bean
     fun corsConfigurationSource(): UrlBasedCorsConfigurationSource {
         val configuration = CorsConfiguration().apply {
-            allowedOrigins = listOf("https://cdpn.io", "http://localhost:3000")
+            allowedOrigins = listOf("https://cdpn.io", AppConfig.siteFrontUrl)
             allowedMethods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
             allowCredentials = true
             allowedHeaders = listOf("*")

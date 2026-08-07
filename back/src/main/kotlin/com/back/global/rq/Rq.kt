@@ -6,6 +6,7 @@ import com.back.domain.member.member.service.MemberService
 import com.back.domain.post.postUser.entity.PostUser
 import com.back.domain.post.postUser.entity.PostUserProxy
 import com.back.domain.post.postUser.service.PostUserService
+import com.back.global.app.AppConfig
 import com.back.global.security.SecurityUser
 import jakarta.servlet.http.Cookie
 import jakarta.servlet.http.HttpServletRequest
@@ -77,7 +78,7 @@ class Rq(
         val cookie = Cookie(name, value ?: "").apply {
             path = "/"
             isHttpOnly = true
-            domain = "localhost"
+            domain = AppConfig.cookieDomain
             secure = true
             setAttribute("SameSite", "Strict")
             maxAge = if (value.isNullOrBlank()) 0 else 60 * 60 * 24 * 365

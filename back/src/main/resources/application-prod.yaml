@@ -1,0 +1,30 @@
+spring:
+  # dev/test 와 달리 레디스 자동설정을 끄지 않는다(exclude 항목 자체가 없음).
+  data:
+    redis:
+      host: redis_1                                   # 도커 common 네트워크의 컨테이너 이름
+      port: 6379
+      password: ${SPRING__DATA__REDIS__PASSWORD}
+  datasource:
+    url: jdbc:mysql://mysql_1:3306/${SPRING__DATASOURCE__URL___DB_NAME}
+    username: lldjlocal                               # 172.18.%.% 대역 전용 계정
+    password: 1234
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    show-sql: false                                   # 운영 로그 소음 제거
+    properties:
+      hibernate:
+        format_sql: false
+        highlight_sql: false
+        use_sql_comments: false
+logging:
+  level:
+    com.back: INFO
+    org.hibernate.orm.jdbc.bind: INFO
+    org.hibernate.orm.jdbc.extract: INFO
+    org.springframework.transaction.interceptor: INFO
+custom:
+  site:
+    cookieDomain: "${custom.prod.cookieDomain}"
+    frontUrl: "${custom.prod.frontUrl}"
+    backUrl: "${custom.prod.backUrl}"

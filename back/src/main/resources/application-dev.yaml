@@ -1,4 +1,12 @@
 spring:
+  # 로컬에서는 레디스가 없어도 뜨도록 관련 자동설정을 끈다.
+  # Spring Boot 4 에서 자동설정 클래스가 모듈별 패키지로 이동했으므로 아래 이름을 사용한다.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.health.DataRedisHealthContributorAutoConfiguration
+      - org.springframework.boot.session.autoconfigure.SessionAutoConfiguration
+      - org.springframework.boot.session.data.redis.autoconfigure.SessionDataRedisAutoConfiguration
   datasource:
     url: jdbc:h2:./db_dev;MODE=MySQL;AUTO_SERVER=TRUE
     username: sa
