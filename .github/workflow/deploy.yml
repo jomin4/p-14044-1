@@ -1,0 +1,207 @@
+name: deploy
+
+# =========================
+# 전역 환경변수
+# =========================
+env:
+  IMAGE_REPOSITORY: p-14044-1        # GHCR 이미지 이름 (소유자 제외)
+  CONTAINER_1_NAME: p-14044-1_1      # 배포 대상 컨테이너 이름
+  EC2_INSTANCE_TAG_NAME: terra-ec2-1 # 배포 대상 EC2 의 Name 태그
+  DOCKER_NETWORK: common             # 도커 네트워크
+  BACKEND_DIR: back                  # Dockerfile 위치 (강의는 backend)
+
+on:
+  push:
+    paths:
+      - ".github/workflows/**"
+      - "back/src/**"
+      - "back/build.gradle.kts"
+      - "back/settings.gradle.kts"
+      - "back/Dockerfile"
+    branches:
+      - main
+
+# 이 워크플로가 실제로 쓰는 권한만 선언
+permissions:
+  contents: write # 태그 / 릴리즈
+  packages: write # GHCR 푸시
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # ---------------------------------------------------------
+  # 1) 버전 태그 + 릴리즈 생성
+  # ---------------------------------------------------------
+  makeTagAndRelease:
+    name: 태그와 릴리즈 생성
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.create_tag.outputs.new_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 태그 히스토리 전체가 있어야 버전 계산이 맞는다
+
+      - name: 버전 태그 생성
+        id: create_tag
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 릴리즈 생성
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.create_tag.outputs.new_tag }}
+          CHANGELOG: ${{ steps.create_tag.outputs.changelog }}
+        run: |
+          printf '%s' "$CHANGELOG" > /tmp/notes.md
+          gh release create "$TAG" --title "Release $TAG" --notes-file /tmp/notes.md
+
+  # ---------------------------------------------------------
+  # 2) 도커 이미지 빌드 / 푸시
+  # ---------------------------------------------------------
+  buildImageAndPush:
+    name: 도커 이미지 빌드와 푸시
+    needs: makeTagAndRelease
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: .env 파일 생성
+        env:
+          DOT_ENV: ${{ secrets.DOT_ENV }}
+        run: |
+          mkdir -p "${{ env.BACKEND_DIR }}"
+          printf "%s" "${DOT_ENV}" > "${{ env.BACKEND_DIR }}/.env"
+
+      - name: 소유자명 소문자로 변환
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: echo "OWNER_LC=${OWNER,,}" >> "${GITHUB_ENV}"
+
+      - name: Docker Buildx 설치
+        uses: docker/setup-buildx-action@v3
+
+      - name: GHCR 로그인
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 빌드 앤 푸시
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.BACKEND_DIR }}
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ghcr.io/${{ env.OWNER_LC }}/${{ env.IMAGE_REPOSITORY }}:${{ needs.makeTagAndRelease.outputs.tag_name }}
+            ghcr.io/${{ env.OWNER_LC }}/${{ env.IMAGE_REPOSITORY }}:latest
+
+  # ---------------------------------------------------------
+  # 3) 배포 (SSM 원격 실행)
+  # ---------------------------------------------------------
+  deploy:
+    name: 배포
+    needs: [makeTagAndRelease, buildImageAndPush]
+    runs-on: ubuntu-latest
+    steps:
+      - name: AWS 자격증명 구성
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: EC2 인스턴스 ID 조회
+        run: |
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=${{ env.EC2_INSTANCE_TAG_NAME }}" \
+                      "Name=instance-state-name,Values=running" \
+            --query "Reservations[].Instances[].InstanceId" --output text)
+          [[ -n "$INSTANCE_ID" && "$INSTANCE_ID" != "None" ]] \
+            || { echo "실행 중인 인스턴스를 찾지 못했습니다"; exit 1; }
+          echo "INSTANCE_ID=$INSTANCE_ID" >> "$GITHUB_ENV"
+          echo "대상 인스턴스: $INSTANCE_ID"
+
+      - name: 원격 배포 스크립트 작성
+        env:
+          OWNER: ${{ github.repository_owner }}
+          IMAGE_TAG: ${{ needs.makeTagAndRelease.outputs.tag_name }}
+        run: |
+          OWNER_LC="${OWNER,,}"
+          PREFIX="ghcr.io/${OWNER_LC}/${{ env.IMAGE_REPOSITORY }}"
+          {
+            # --- 앞부분: 러너에서 값이 치환되는 구간 ---
+            echo "IMAGE='${PREFIX}:${IMAGE_TAG}'"
+            echo "IMAGE_PREFIX='${PREFIX}'"
+            echo "IMAGE_TAG='${IMAGE_TAG}'"
+            echo "CONTAINER='${{ env.CONTAINER_1_NAME }}'"
+            echo "NET='${{ env.DOCKER_NETWORK }}'"
+            # --- 뒷부분: EC2 에서 그대로 실행될 구간 ---
+            cat <<'SCRIPT'
+          set -Eeuo pipefail
+
+          LOG="/tmp/ssm-$(date +%Y%m%d_%H%M%S).log"
+          exec > >(awk '{ fflush(); print strftime("[%Y-%m-%d %H:%M:%S]"), $0 }' | tee -a "$LOG")
+          exec 2>&1
+
+          echo "배포 이미지: ${IMAGE}"
+          docker pull "${IMAGE}"
+
+          docker stop "${CONTAINER}" || true
+          docker rm   "${CONTAINER}" || true
+
+          docker run -d \
+            --restart unless-stopped \
+            --network "${NET}" \
+            --name "${CONTAINER}" \
+            -e TZ=Asia/Seoul \
+            "${IMAGE}"
+
+          # 현재 태그와 latest 를 제외한 옛 이미지 정리
+          {
+            docker images --format '{{.Repository}}:{{.Tag}}' \
+              | grep -F "${IMAGE_PREFIX}:" \
+              | grep -v -F ":${IMAGE_TAG}" \
+              | grep -v -F ":latest" \
+              | xargs -r docker rmi
+          } || true
+
+          echo "배포 완료: ${CONTAINER} <- ${IMAGE}"
+          SCRIPT
+          } > /tmp/deploy.sh
+
+      - name: SSM 으로 원격 실행
+        run: |
+          jq -Rs '{commands: [.]}' /tmp/deploy.sh > /tmp/params.json
+
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy ${{ needs.makeTagAndRelease.outputs.tag_name }}" \
+            --parameters file:///tmp/params.json \
+            --query "Command.CommandId" --output text)
+          echo "CommandId: $CMD_ID"
+
+          aws ssm wait command-executed \
+            --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" || true
+
+          echo "----- 원격 출력 -----"
+          aws ssm get-command-invocation \
+            --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query "StandardOutputContent" --output text
+          echo "----- 원격 오류 -----"
+          aws ssm get-command-invocation \
+            --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query "StandardErrorContent" --output text
+
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query "Status" --output text)
+          echo "원격 실행 상태: $STATUS"
+          [ "$STATUS" = "Success" ] || exit 1
