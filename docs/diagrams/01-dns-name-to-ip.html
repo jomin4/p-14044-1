@@ -1,0 +1,463 @@
+<title>이름 → IP · jomin4.cloud 이름 해석 경로</title>
+<style>
+  :root {
+    --ground:#EEF1F5;
+    --surface:#FFFFFF;
+    --ink:#16243A;
+    --ink-soft:#5D6B7E;
+    --ink-faint:#93A0B0;
+    --rule:#CBD4DF;
+    --rule-soft:#E1E7EE;
+    --query:#3B54A0;
+    --answer:#CC4419;
+    --answer-wash:rgba(204,68,25,.07);
+    --query-wash:rgba(59,84,160,.05);
+    --chip:#E7EBF1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:#0D141C;
+      --surface:#151F2A;
+      --ink:#E3EAF3;
+      --ink-soft:#93A3B6;
+      --ink-faint:#66788C;
+      --rule:#2B3B4D;
+      --rule-soft:#22303F;
+      --query:#8AA0EA;
+      --answer:#FF7C4D;
+      --answer-wash:rgba(255,124,77,.10);
+      --query-wash:rgba(138,160,234,.07);
+      --chip:#1E2A37;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0D141C;
+    --surface:#151F2A;
+    --ink:#E3EAF3;
+    --ink-soft:#93A3B6;
+    --ink-faint:#66788C;
+    --rule:#2B3B4D;
+    --rule-soft:#22303F;
+    --query:#8AA0EA;
+    --answer:#FF7C4D;
+    --answer-wash:rgba(255,124,77,.10);
+    --query-wash:rgba(138,160,234,.07);
+    --chip:#1E2A37;
+  }
+  :root[data-theme="light"] {
+    --ground:#EEF1F5;
+    --surface:#FFFFFF;
+    --ink:#16243A;
+    --ink-soft:#5D6B7E;
+    --ink-faint:#93A0B0;
+    --rule:#CBD4DF;
+    --rule-soft:#E1E7EE;
+    --query:#3B54A0;
+    --answer:#CC4419;
+    --answer-wash:rgba(204,68,25,.07);
+    --query-wash:rgba(59,84,160,.05);
+    --chip:#E7EBF1;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin:0;
+    background:var(--ground);
+    color:var(--ink);
+    font-family:"Pretendard","Pretendard Variable","Apple SD Gothic Neo","Malgun Gothic",
+                ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;
+    line-height:1.6;
+  }
+
+  .wrap {
+    max-width:1180px;
+    margin:0 auto;
+    padding:56px 24px 96px;
+    display:flex;
+    flex-direction:column;
+    gap:40px;
+  }
+
+  header { display:flex; flex-direction:column; gap:14px; }
+
+  .eyebrow {
+    font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace;
+    font-size:11.5px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+  }
+
+  h1 {
+    margin:0;
+    font-size:clamp(30px,4.6vw,46px);
+    line-height:1.12;
+    letter-spacing:-.022em;
+    font-weight:750;
+    text-wrap:balance;
+  }
+  h1 .dim { color:var(--ink-soft); font-weight:500; }
+
+  .facts {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-top:4px;
+  }
+  .fact {
+    font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace;
+    font-size:12px;
+    padding:5px 11px;
+    border-radius:3px;
+    background:var(--chip);
+    color:var(--ink-soft);
+    white-space:nowrap;
+  }
+  .fact b { color:var(--ink); font-weight:600; }
+
+  .plate {
+    background:var(--surface);
+    border:1px solid var(--rule-soft);
+    border-radius:4px;
+    padding:26px 26px 22px;
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+  }
+
+  .plate-head {
+    display:flex;
+    align-items:baseline;
+    gap:14px;
+    padding-bottom:14px;
+    border-bottom:1px solid var(--rule-soft);
+  }
+  .plate-num {
+    font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace;
+    font-size:11.5px;
+    letter-spacing:.14em;
+    color:var(--answer);
+    font-weight:600;
+    flex:none;
+  }
+  .plate-title {
+    margin:0;
+    font-size:19px;
+    font-weight:650;
+    letter-spacing:-.012em;
+  }
+
+  figure { margin:0; display:flex; flex-direction:column; gap:14px; }
+  .canvas { overflow-x:auto; }
+  svg { display:block; width:100%; min-width:660px; height:auto; }
+
+  figcaption {
+    font-size:13.5px;
+    color:var(--ink-soft);
+    max-width:74ch;
+    border-left:2px solid var(--rule);
+    padding-left:14px;
+  }
+  figcaption b { color:var(--ink); font-weight:600; }
+  figcaption code {
+    font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace;
+    font-size:12.5px;
+    color:var(--ink);
+  }
+
+  /* ---- SVG primitives ---- */
+  .box       { fill:var(--surface); stroke:var(--rule); stroke-width:1.4; }
+  .box-key   { fill:var(--surface); stroke:var(--answer); stroke-width:1.8; }
+  .box-out   { fill:none; stroke:var(--rule); stroke-width:1.4; stroke-dasharray:5 4; }
+  .band      { fill:var(--query-wash); stroke:var(--rule); stroke-width:1; stroke-dasharray:4 5; }
+  .zone      { fill:none; stroke:var(--rule); stroke-width:1.2; stroke-dasharray:6 5; }
+  .lifeline  { stroke:var(--rule); stroke-width:1; stroke-dasharray:3 5; }
+  .link      { stroke:var(--rule); stroke-width:1.6; fill:none; }
+
+  .q  { stroke:var(--query); stroke-width:1.9; fill:none; }
+  .rf { stroke:var(--ink-faint); stroke-width:1.6; fill:none; stroke-dasharray:6 4; }
+  .an { stroke:var(--answer); stroke-width:2.6; fill:none; }
+
+  .mk-q  { fill:var(--query); }
+  .mk-rf { fill:var(--ink-faint); }
+  .mk-an { fill:var(--answer); }
+  .mk-nk { fill:var(--rule); }
+
+  .t      { fill:var(--ink); font-size:13.5px; font-weight:650;
+            font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",ui-sans-serif,sans-serif; }
+  .t-sub  { fill:var(--ink-soft); font-size:11px;
+            font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace; }
+  .t-q    { fill:var(--query); font-size:12px; font-weight:600;
+            font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace; }
+  .t-rf   { fill:var(--ink-faint); font-size:11.5px;
+            font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace; }
+  .t-an   { fill:var(--answer); font-size:12.5px; font-weight:700;
+            font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace; }
+  .t-note { fill:var(--ink-faint); font-size:11.5px; letter-spacing:.05em;
+            font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",ui-sans-serif,sans-serif; }
+  .t-step { fill:var(--ink-soft); font-size:11.5px; font-weight:700;
+            font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace; }
+  .step-ring { fill:none; stroke:var(--rule); stroke-width:1.3; }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">phase 1 — name resolution</div>
+    <h1>이름 → IP<br><span class="dim">api.jomin4.cloud 가 3.37.29.175 가 되기까지</span></h1>
+    <div class="facts">
+      <span class="fact">등록대행 <b>가비아</b></span>
+      <span class="fact">권한 DNS <b>DNSZi</b></span>
+      <span class="fact">A <b>3.37.29.175</b></span>
+      <span class="fact">TTL <b>7200s</b></span>
+    </div>
+  </header>
+
+  <!-- ============ PLATE 01 ============ -->
+  <section class="plate">
+    <div class="plate-head">
+      <span class="plate-num">01</span>
+      <h2 class="plate-title">재귀 질의 — 리졸버가 세 서버를 직접 왕복한다</h2>
+    </div>
+
+    <figure>
+      <div class="canvas">
+        <svg viewBox="0 0 1200 640" role="img"
+             aria-label="재귀 리졸버가 루트 서버, .cloud TLD 서버, DNSZi 권한 서버에게 차례로 직접 질의하여 api.jomin4.cloud의 A 레코드 3.37.29.175를 얻는 시퀀스">
+          <defs>
+            <marker id="aq" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <polygon class="mk-q" points="0,0 10,5 0,10"></polygon>
+            </marker>
+            <marker id="arf" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <polygon class="mk-rf" points="0,0 10,5 0,10"></polygon>
+            </marker>
+            <marker id="aan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <polygon class="mk-an" points="0,0 10,5 0,10"></polygon>
+            </marker>
+          </defs>
+
+          <!-- recursive band -->
+          <rect class="band" x="300" y="162" width="880" height="300" rx="8"></rect>
+          <text class="t-note" x="1172" y="152" text-anchor="end">재귀 질의 구간 · 리졸버가 대신 물어본다</text>
+
+          <!-- lane headers -->
+          <rect class="box" x="60"   y="24" width="140" height="52" rx="4"></rect>
+          <text class="t"     x="130" y="46" text-anchor="middle">브라우저</text>
+          <text class="t-sub" x="130" y="63" text-anchor="middle">stub resolver</text>
+
+          <rect class="box" x="310"  y="24" width="140" height="52" rx="4"></rect>
+          <text class="t"     x="380" y="46" text-anchor="middle">재귀 리졸버</text>
+          <text class="t-sub" x="380" y="63" text-anchor="middle">168.126.63.1</text>
+
+          <rect class="box" x="580"  y="24" width="140" height="52" rx="4"></rect>
+          <text class="t"     x="650" y="46" text-anchor="middle">루트 서버</text>
+          <text class="t-sub" x="650" y="63" text-anchor="middle">a~m.root-servers</text>
+
+          <rect class="box" x="800"  y="24" width="140" height="52" rx="4"></rect>
+          <text class="t"     x="870" y="46" text-anchor="middle">.cloud TLD</text>
+          <text class="t-sub" x="870" y="63" text-anchor="middle">ns01.trs-dns.net</text>
+
+          <rect class="box-key" x="1020" y="24" width="140" height="52" rx="4"></rect>
+          <text class="t"     x="1090" y="46" text-anchor="middle">DNSZi 권한</text>
+          <text class="t-sub" x="1090" y="63" text-anchor="middle">ns22.dnszi.com</text>
+
+          <!-- lifelines -->
+          <line class="lifeline" x1="130"  y1="80" x2="130"  y2="560"></line>
+          <line class="lifeline" x1="380"  y1="80" x2="380"  y2="560"></line>
+          <line class="lifeline" x1="650"  y1="80" x2="650"  y2="560"></line>
+          <line class="lifeline" x1="870"  y1="80" x2="870"  y2="560"></line>
+          <line class="lifeline" x1="1090" y1="80" x2="1090" y2="560"></line>
+
+          <!-- step 1 -->
+          <circle class="step-ring" cx="30" cy="124" r="13"></circle>
+          <text class="t-step" x="30" y="128" text-anchor="middle">1</text>
+          <line class="q" x1="130" y1="124" x2="374" y2="124" marker-end="url(#aq)"></line>
+          <text class="t-q" x="255" y="114" text-anchor="middle">api.jomin4.cloud  A ?</text>
+
+          <!-- step 2 -->
+          <circle class="step-ring" cx="30" cy="212" r="13"></circle>
+          <text class="t-step" x="30" y="216" text-anchor="middle">2</text>
+          <line class="q" x1="380" y1="200" x2="644" y2="200" marker-end="url(#aq)"></line>
+          <text class="t-q" x="512" y="190" text-anchor="middle">A ?</text>
+          <line class="rf" x1="650" y1="238" x2="386" y2="238" marker-end="url(#arf)"></line>
+          <text class="t-rf" x="512" y="256" text-anchor="middle">.cloud → ns01.trs-dns.net</text>
+
+          <!-- step 3 -->
+          <circle class="step-ring" cx="30" cy="312" r="13"></circle>
+          <text class="t-step" x="30" y="316" text-anchor="middle">3</text>
+          <line class="q" x1="380" y1="300" x2="864" y2="300" marker-end="url(#aq)"></line>
+          <text class="t-q" x="622" y="290" text-anchor="middle">A ?</text>
+          <line class="rf" x1="870" y1="338" x2="386" y2="338" marker-end="url(#arf)"></line>
+          <text class="t-rf" x="622" y="356" text-anchor="middle">jomin4.cloud → ns11 / ns22 / ns37 .dnszi.com</text>
+
+          <!-- step 4 -->
+          <circle class="step-ring" cx="30" cy="412" r="13"></circle>
+          <text class="t-step" x="30" y="416" text-anchor="middle">4</text>
+          <line class="q" x1="380" y1="400" x2="1084" y2="400" marker-end="url(#aq)"></line>
+          <text class="t-q" x="732" y="390" text-anchor="middle">A ?</text>
+          <line class="an" x1="1090" y1="438" x2="386" y2="438" marker-end="url(#aan)"></line>
+          <text class="t-an" x="732" y="456" text-anchor="middle">A  3.37.29.175   ← 권한 응답 (authoritative)</text>
+
+          <!-- step 5 -->
+          <circle class="step-ring" cx="30" cy="512" r="13"></circle>
+          <text class="t-step" x="30" y="516" text-anchor="middle">5</text>
+          <line class="an" x1="380" y1="512" x2="136" y2="512" marker-end="url(#aan)"></line>
+          <text class="t-an" x="255" y="502" text-anchor="middle">3.37.29.175</text>
+          <text class="t-note" x="392" y="536">캐시에 7200초 보관</text>
+
+          <text class="t-note" x="60" y="600">파란 실선 = 질의 · 회색 점선 = 위임 안내(referral) · 주황 = 최종 답</text>
+        </svg>
+      </div>
+      <figcaption>
+        루트와 TLD는 답을 <b>대신 물어봐 주지 않는다</b>. "나는 모르니 저기 물어봐"라는 안내만 돌려주고, 실제 질문은 매번 리졸버가 새로 던진다. <code>SERVFAIL</code>은 이 중 한 칸이 끊겼을 때 나온다.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ PLATE 02 ============ -->
+  <section class="plate">
+    <div class="plate-head">
+      <span class="plate-num">02</span>
+      <h2 class="plate-title">위임 사슬 — 가비아는 트래픽 경로에 없다</h2>
+    </div>
+
+    <figure>
+      <div class="canvas">
+        <svg viewBox="0 0 1000 680" role="img"
+             aria-label="루트에서 .cloud, jomin4.cloud로 내려오는 위임 트리와 두 A 레코드가 같은 IP를 가리키는 구조. 가비아는 레지스트리에 NS 위임을 기록만 하고 트래픽 경로에는 없다">
+          <defs>
+            <marker id="bnk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <polygon class="mk-nk" points="0,0 10,5 0,10"></polygon>
+            </marker>
+            <marker id="brf" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <polygon class="mk-rf" points="0,0 10,5 0,10"></polygon>
+            </marker>
+            <marker id="ban" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <polygon class="mk-an" points="0,0 10,5 0,10"></polygon>
+            </marker>
+          </defs>
+
+          <!-- managed zone -->
+          <rect class="zone" x="266" y="288" width="548" height="356" rx="10"></rect>
+          <text class="t-note" x="806" y="280" text-anchor="end">DNSZi — 내가 직접 관리하는 구간</text>
+
+          <!-- root -->
+          <rect class="box" x="410" y="40" width="260" height="64" rx="4"></rect>
+          <text class="t"     x="540" y="68" text-anchor="middle">루트 존  “.”</text>
+          <text class="t-sub" x="540" y="88" text-anchor="middle">a~m.root-servers.net</text>
+
+          <line class="link" x1="540" y1="104" x2="540" y2="164" marker-end="url(#bnk)"></line>
+          <text class="t-rf" x="556" y="138">위임 (NS)</text>
+
+          <!-- .cloud -->
+          <rect class="box" x="410" y="170" width="260" height="64" rx="4"></rect>
+          <text class="t"     x="540" y="198" text-anchor="middle">.cloud 레지스트리</text>
+          <text class="t-sub" x="540" y="218" text-anchor="middle">ns01.trs-dns.net</text>
+
+          <line class="link" x1="540" y1="234" x2="540" y2="294" marker-end="url(#bnk)"></line>
+          <text class="t-rf" x="556" y="268">위임 (NS)</text>
+
+          <!-- zone -->
+          <rect class="box" x="410" y="300" width="260" height="64" rx="4"></rect>
+          <text class="t"     x="540" y="328" text-anchor="middle">jomin4.cloud 존</text>
+          <text class="t-sub" x="540" y="348" text-anchor="middle">ns11 / ns22 / ns37 .dnszi.com</text>
+
+          <!-- 가비아 -->
+          <rect class="box-out" x="40" y="164" width="212" height="76" rx="4"></rect>
+          <text class="t"     x="146" y="192" text-anchor="middle">가비아</text>
+          <text class="t-sub" x="146" y="212" text-anchor="middle">registrar</text>
+          <text class="t-sub" x="146" y="230" text-anchor="middle">등록 · 소유권</text>
+          <line class="rf" x1="252" y1="202" x2="404" y2="202" marker-end="url(#brf)"></line>
+          <text class="t-rf" x="328" y="192" text-anchor="middle">NS 기록</text>
+          <text class="t-rf" x="328" y="222" text-anchor="middle">1회성</text>
+          <text class="t-note" x="146" y="262" text-anchor="middle">트래픽 경유 없음</text>
+
+          <!-- fan out -->
+          <path class="link" d="M 540 364 L 540 392 L 400 392 L 400 424" marker-end="url(#bnk)"></path>
+          <path class="link" d="M 540 364 L 540 392 L 680 392 L 680 424" marker-end="url(#bnk)"></path>
+          <text class="t-rf" x="540" y="384" text-anchor="middle">A 레코드</text>
+
+          <rect class="box" x="292" y="430" width="216" height="60" rx="4"></rect>
+          <text class="t"     x="400" y="456" text-anchor="middle">api.jomin4.cloud</text>
+          <text class="t-sub" x="400" y="475" text-anchor="middle">백엔드 서비스</text>
+
+          <rect class="box" x="572" y="430" width="216" height="60" rx="4"></rect>
+          <text class="t"     x="680" y="456" text-anchor="middle">jomin4.cloud</text>
+          <text class="t-sub" x="680" y="475" text-anchor="middle">루트 · apex</text>
+
+          <path class="an" d="M 400 490 L 400 526 L 540 526 L 540 556" marker-end="url(#ban)"></path>
+          <path class="an" d="M 680 490 L 680 526 L 540 526 L 540 556" marker-end="url(#ban)"></path>
+
+          <rect class="box-key" x="420" y="562" width="240" height="60" rx="4"></rect>
+          <text class="t-an"  x="540" y="590" text-anchor="middle" font-size="15">3.37.29.175</text>
+          <text class="t-sub" x="540" y="609" text-anchor="middle">EC2 · ap-northeast-2</text>
+
+          <text class="t-note" x="40" y="664">두 이름은 같은 IP로 수렴한다 — 구분은 IP가 아니라 TLS SNI · HTTP Host 헤더에서 일어난다</text>
+        </svg>
+      </div>
+      <figcaption>
+        가비아가 한 일은 <b>레지스트리에 네임서버 한 줄을 써 준 것</b>뿐. 그 뒤로는 조회 트래픽이 가비아를 거치지 않는다. 네임서버를 DNSZi로 바꾼 순간 관리 주체가 통째로 옮겨간 이유다.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ PLATE 03 ============ -->
+  <section class="plate">
+    <div class="plate-head">
+      <span class="plate-num">03</span>
+      <h2 class="plate-title">캐시 계층 — 바꾼 값이 늦게 보이는 이유</h2>
+    </div>
+
+    <figure>
+      <div class="canvas">
+        <svg viewBox="0 0 1080 320" role="img"
+             aria-label="브라우저 캐시, OS 캐시, 재귀 리졸버 캐시를 지나 권한 서버에 도달하는 계층과 각 단계의 TTL. 리졸버 캐시는 7200초를 보관한다">
+          <defs>
+            <marker id="cnk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <polygon class="mk-nk" points="0,0 10,5 0,10"></polygon>
+            </marker>
+            <marker id="can" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <polygon class="mk-an" points="0,0 10,5 0,10"></polygon>
+            </marker>
+          </defs>
+
+          <rect class="box" x="24"  y="52" width="196" height="72" rx="4"></rect>
+          <text class="t"     x="122" y="82" text-anchor="middle">브라우저 캐시</text>
+          <text class="t-sub" x="122" y="102" text-anchor="middle">수십 초 ~ 수 분</text>
+
+          <rect class="box" x="272" y="52" width="196" height="72" rx="4"></rect>
+          <text class="t"     x="370" y="82" text-anchor="middle">OS 캐시</text>
+          <text class="t-sub" x="370" y="102" text-anchor="middle">ipconfig /flushdns</text>
+
+          <rect class="box-key" x="520" y="52" width="220" height="72" rx="4"></rect>
+          <text class="t"     x="630" y="82" text-anchor="middle">재귀 리졸버 캐시</text>
+          <text class="t-an"  x="630" y="103" text-anchor="middle">TTL 7200s = 2h</text>
+
+          <rect class="box" x="792" y="52" width="264" height="72" rx="4"></rect>
+          <text class="t"     x="924" y="82" text-anchor="middle">DNSZi 권한 서버</text>
+          <text class="t-sub" x="924" y="102" text-anchor="middle">원본 · 즉시 반영</text>
+
+          <line class="link" x1="220" y1="88" x2="266" y2="88" marker-end="url(#cnk)"></line>
+          <line class="link" x1="468" y1="88" x2="514" y2="88" marker-end="url(#cnk)"></line>
+          <line class="link" x1="740" y1="88" x2="786" y2="88" marker-end="url(#cnk)"></line>
+          <text class="t-rf" x="243" y="42" text-anchor="middle">miss</text>
+          <text class="t-rf" x="491" y="42" text-anchor="middle">miss</text>
+          <text class="t-rf" x="763" y="42" text-anchor="middle">miss</text>
+
+          <path class="an" d="M 924 124 L 924 176 L 122 176 L 122 130" marker-end="url(#can)"></path>
+          <text class="t-an" x="540" y="168" text-anchor="middle">응답 + TTL 만큼 각 계층에 저장</text>
+
+          <text class="t-note" x="24" y="232">레코드가 “없다”는 결과도 SOA minimum 값만큼 캐싱된다  ·  negative caching</text>
+          <text class="t-note" x="24" y="256">→ 새 A 레코드를 넣어도 이미 “없음”을 캐싱한 리졸버는 최대 2시간 뒤에야 바뀐 값을 본다</text>
+          <text class="t-note" x="24" y="280">→ KT DNS 는 반영, Google 8.8.8.8 은 아직 옛 결과 — 리졸버마다 캐시가 따로 논다</text>
+        </svg>
+      </div>
+      <figcaption>
+        권한 서버에 값을 넣는 것과 <b>세상이 그 값을 보는 것</b>은 별개다. IP가 자주 바뀔 구간이라면 TTL을 <code>300~600</code>초로 미리 낮춰두는 편이 안전하다.
+      </figcaption>
+    </figure>
+  </section>
+
+</div>

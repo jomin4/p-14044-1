@@ -1,0 +1,405 @@
+<title>IP → 컨테이너 · 패킷이 지나는 경계들</title>
+<style>
+  :root {
+    --ground:#EEF1F5;
+    --surface:#FFFFFF;
+    --ink:#16243A;
+    --ink-soft:#5D6B7E;
+    --ink-faint:#93A0B0;
+    --rule:#CBD4DF;
+    --rule-soft:#E1E7EE;
+    --query:#3B54A0;
+    --answer:#CC4419;
+    --query-wash:rgba(59,84,160,.05);
+    --chip:#E7EBF1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:#0D141C; --surface:#151F2A; --ink:#E3EAF3; --ink-soft:#93A3B6;
+      --ink-faint:#66788C; --rule:#2B3B4D; --rule-soft:#22303F;
+      --query:#8AA0EA; --answer:#FF7C4D; --query-wash:rgba(138,160,234,.07); --chip:#1E2A37;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0D141C; --surface:#151F2A; --ink:#E3EAF3; --ink-soft:#93A3B6;
+    --ink-faint:#66788C; --rule:#2B3B4D; --rule-soft:#22303F;
+    --query:#8AA0EA; --answer:#FF7C4D; --query-wash:rgba(138,160,234,.07); --chip:#1E2A37;
+  }
+  :root[data-theme="light"] {
+    --ground:#EEF1F5; --surface:#FFFFFF; --ink:#16243A; --ink-soft:#5D6B7E;
+    --ink-faint:#93A0B0; --rule:#CBD4DF; --rule-soft:#E1E7EE;
+    --query:#3B54A0; --answer:#CC4419; --query-wash:rgba(59,84,160,.05); --chip:#E7EBF1;
+  }
+
+  * { box-sizing:border-box; }
+
+  body {
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:"Pretendard","Pretendard Variable","Apple SD Gothic Neo","Malgun Gothic",
+                ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased; line-height:1.6;
+  }
+
+  .wrap { max-width:1180px; margin:0 auto; padding:56px 24px 96px;
+          display:flex; flex-direction:column; gap:40px; }
+
+  header { display:flex; flex-direction:column; gap:14px; }
+
+  .eyebrow { font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace;
+             font-size:11.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
+
+  h1 { margin:0; font-size:clamp(30px,4.6vw,46px); line-height:1.12;
+       letter-spacing:-.022em; font-weight:750; text-wrap:balance; }
+  h1 .dim { color:var(--ink-soft); font-weight:500; }
+
+  .facts { display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+  .fact { font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace;
+          font-size:12px; padding:5px 11px; border-radius:3px;
+          background:var(--chip); color:var(--ink-soft); white-space:nowrap; }
+  .fact b { color:var(--ink); font-weight:600; }
+
+  .plate { background:var(--surface); border:1px solid var(--rule-soft); border-radius:4px;
+           padding:26px 26px 22px; display:flex; flex-direction:column; gap:18px; }
+
+  .plate-head { display:flex; align-items:baseline; gap:14px;
+                padding-bottom:14px; border-bottom:1px solid var(--rule-soft); }
+  .plate-num { font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace;
+               font-size:11.5px; letter-spacing:.14em; color:var(--answer); font-weight:600; flex:none; }
+  .plate-title { margin:0; font-size:19px; font-weight:650; letter-spacing:-.012em; }
+
+  figure { margin:0; display:flex; flex-direction:column; gap:14px; }
+  .canvas { overflow-x:auto; }
+  svg { display:block; width:100%; min-width:660px; height:auto; }
+
+  figcaption { font-size:13.5px; color:var(--ink-soft); max-width:74ch;
+               border-left:2px solid var(--rule); padding-left:14px; }
+  figcaption b { color:var(--ink); font-weight:600; }
+  figcaption code { font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace;
+                    font-size:12.5px; color:var(--ink); }
+
+  .box     { fill:var(--surface); stroke:var(--rule); stroke-width:1.4; }
+  .box-key { fill:var(--surface); stroke:var(--answer); stroke-width:1.8; }
+  .box-out { fill:none; stroke:var(--rule); stroke-width:1.4; stroke-dasharray:5 4; }
+  .zone    { fill:none; stroke:var(--rule); stroke-width:1.2; stroke-dasharray:6 5; }
+  .zone-in { fill:var(--query-wash); stroke:var(--rule); stroke-width:1.2; stroke-dasharray:6 5; }
+  .bar     { fill:var(--chip); stroke:var(--rule); stroke-width:1.2; }
+  .bar-key { fill:var(--chip); stroke:var(--answer); stroke-width:1.6; }
+  .link    { stroke:var(--rule); stroke-width:1.6; fill:none; }
+  .q       { stroke:var(--query); stroke-width:2; fill:none; }
+  .an      { stroke:var(--answer); stroke-width:2.4; fill:none; }
+  .rf      { stroke:var(--ink-faint); stroke-width:1.5; fill:none; stroke-dasharray:6 4; }
+
+  .mk-nk { fill:var(--rule); }
+  .mk-q  { fill:var(--query); }
+  .mk-an { fill:var(--answer); }
+
+  .t      { fill:var(--ink); font-size:13.5px; font-weight:650;
+            font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",ui-sans-serif,sans-serif; }
+  .t-sub  { fill:var(--ink-soft); font-size:11px;
+            font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace; }
+  .t-q    { fill:var(--query); font-size:11.5px; font-weight:600;
+            font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace; }
+  .t-an   { fill:var(--answer); font-size:12px; font-weight:700;
+            font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace; }
+  .t-rf   { fill:var(--ink-faint); font-size:11.5px;
+            font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace; }
+  .t-note { fill:var(--ink-faint); font-size:11.5px; letter-spacing:.04em;
+            font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",ui-sans-serif,sans-serif; }
+  .t-zone { fill:var(--ink-faint); font-size:11.5px; letter-spacing:.08em;
+            font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace; }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">phase 2 — packet transport</div>
+    <h1>IP → 컨테이너<br><span class="dim">3.37.29.175 로 떠난 패킷이 지나는 경계들</span></h1>
+    <div class="facts">
+      <span class="fact">VPC <b>10.0.0.0/16</b></span>
+      <span class="fact">서브넷 <b>10.0.1.0/24 · 2b</b></span>
+      <span class="fact">사설 <b>10.0.1.160</b></span>
+      <span class="fact">docker <b>172.18.0.0/16</b></span>
+    </div>
+  </header>
+
+  <!-- ============ PLATE 01 ============ -->
+  <section class="plate">
+    <div class="plate-head">
+      <span class="plate-num">01</span>
+      <h2 class="plate-title">인터넷에서 EC2까지 — VPC 경계를 넘는 세 관문</h2>
+    </div>
+
+    <figure>
+      <div class="canvas">
+        <svg viewBox="0 0 1000 810" role="img"
+             aria-label="브라우저에서 출발한 패킷이 인터넷을 거쳐 AWS VPC의 인터넷 게이트웨이, 라우트 테이블, 서브넷, 보안 그룹을 지나 EC2 인스턴스에 도달하는 경로">
+          <defs>
+            <marker id="p1nk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <polygon class="mk-nk" points="0,0 10,5 0,10"></polygon>
+            </marker>
+            <marker id="p1q" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <polygon class="mk-q" points="0,0 10,5 0,10"></polygon>
+            </marker>
+          </defs>
+
+          <rect class="box" x="350" y="24" width="300" height="60" rx="4"></rect>
+          <text class="t"     x="500" y="50" text-anchor="middle">브라우저</text>
+          <text class="t-sub" x="500" y="70" text-anchor="middle">사용자 단말</text>
+
+          <line class="q" x1="500" y1="84" x2="500" y2="128" marker-end="url(#p1q)"></line>
+          <text class="t-q" x="516" y="110">TCP 443 · UDP 443(QUIC) → 3.37.29.175</text>
+
+          <rect class="box" x="350" y="136" width="300" height="60" rx="4"></rect>
+          <text class="t"     x="500" y="162" text-anchor="middle">인터넷 · ISP 백본</text>
+          <text class="t-sub" x="500" y="182" text-anchor="middle">BGP → AWS 서울 엣지</text>
+
+          <line class="q" x1="500" y1="196" x2="500" y2="286" marker-end="url(#p1q)"></line>
+
+          <!-- VPC -->
+          <rect class="zone" x="90" y="256" width="820" height="502" rx="10"></rect>
+          <text class="t-zone" x="106" y="280">VPC · vpc-0a965226 · 10.0.0.0/16 · 기본 폐쇄망</text>
+
+          <rect class="box" x="330" y="300" width="340" height="96" rx="4"></rect>
+          <text class="t"     x="500" y="326" text-anchor="middle">인터넷 게이트웨이</text>
+          <text class="t-sub" x="500" y="346" text-anchor="middle">igw-044b9b71f80092fd7</text>
+          <text class="t-an"  x="500" y="370" text-anchor="middle">3.37.29.175 ↔ 10.0.1.160</text>
+          <text class="t-note" x="500" y="388" text-anchor="middle">1:1 NAT · 여기서 주소가 바뀐다</text>
+
+          <line class="q" x1="500" y1="396" x2="500" y2="452" marker-end="url(#p1q)"></line>
+          <text class="t-q" x="516" y="418">라우트 테이블 terra-rt-1</text>
+          <text class="t-rf" x="516" y="436">0.0.0.0/0 → igw  규칙이 있어야 통과</text>
+
+          <!-- Subnet -->
+          <rect class="zone" x="150" y="460" width="700" height="282" rx="10"></rect>
+          <text class="t-zone" x="166" y="484">서브넷 terra-subnet-2 · 10.0.1.0/24 · ap-northeast-2b</text>
+
+          <rect class="box" x="330" y="500" width="340" height="62" rx="4"></rect>
+          <text class="t"     x="500" y="526" text-anchor="middle">보안 그룹 terra-sg-1</text>
+          <text class="t-sub" x="500" y="546" text-anchor="middle">ingress · egress  0.0.0.0/0 전체 허용</text>
+
+          <line class="q" x1="500" y1="562" x2="500" y2="600" marker-end="url(#p1q)"></line>
+
+          <rect class="box-key" x="310" y="608" width="380" height="104" rx="4"></rect>
+          <text class="t"     x="500" y="634" text-anchor="middle">EC2 인스턴스</text>
+          <text class="t-sub" x="500" y="654" text-anchor="middle">i-01a76cc8385e57da2 · t3.micro</text>
+          <text class="t-sub" x="500" y="674" text-anchor="middle">ens5 · 10.0.1.160</text>
+          <text class="t-an"  x="500" y="698" text-anchor="middle">공인 IP는 OS 안에 존재하지 않는다</text>
+
+          <text class="t-note" x="90" y="786">보안 그룹은 상태 저장(stateful) — 나가는 응답은 규칙 없이 자동 허용된다</text>
+        </svg>
+      </div>
+      <figcaption>
+        VPC는 <b>기본이 폐쇄망</b>이다. IGW·라우트 규칙·보안 그룹 셋 중 하나만 빠져도 패킷은 도달하지 못한다. EC2 안에서 <code>ip addr</code>를 쳐도 공인 IP가 안 보이는 건 IGW가 주소를 바꿔치기해 주기 때문.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ PLATE 02 ============ -->
+  <section class="plate">
+    <div class="plate-head">
+      <span class="plate-num">02</span>
+      <h2 class="plate-title">EC2 안 — 포트 게시와 도커 네트워크</h2>
+    </div>
+
+    <figure>
+      <div class="canvas">
+        <svg viewBox="0 0 1060 660" role="img"
+             aria-label="EC2 호스트가 게시한 포트가 iptables DNAT로 npm_1 컨테이너에 연결되고, common 도커 네트워크 안에서 npmplus가 스프링부트 컨테이너로 프록시하며 그 컨테이너가 mysql과 redis에 접속하는 구조">
+          <defs>
+            <marker id="p2nk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <polygon class="mk-nk" points="0,0 10,5 0,10"></polygon>
+            </marker>
+            <marker id="p2q" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <polygon class="mk-q" points="0,0 10,5 0,10"></polygon>
+            </marker>
+            <marker id="p2an" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <polygon class="mk-an" points="0,0 10,5 0,10"></polygon>
+            </marker>
+          </defs>
+
+          <text class="t-q" x="60" y="30">외부 트래픽 → 3.37.29.175 : 443</text>
+          <line class="q" x1="180" y1="40" x2="180" y2="100" marker-end="url(#p2q)"></line>
+
+          <!-- host -->
+          <rect class="zone" x="46" y="72" width="968" height="524" rx="10"></rect>
+          <text class="t-zone" x="62" y="96">EC2 호스트 OS · 10.0.1.160 · Amazon Linux 2023</text>
+
+          <rect class="box" x="90" y="170" width="230" height="132" rx="4"></rect>
+          <text class="t"     x="205" y="198" text-anchor="middle">호스트 포트 게시</text>
+          <text class="t-sub" x="205" y="222" text-anchor="middle">0.0.0.0:443  tcp</text>
+          <text class="t-sub" x="205" y="242" text-anchor="middle">0.0.0.0:443  udp · QUIC</text>
+          <text class="t-sub" x="205" y="262" text-anchor="middle">0.0.0.0:80   tcp</text>
+          <text class="t-sub" x="205" y="282" text-anchor="middle">0.0.0.0:81   관리 콘솔</text>
+
+          <line class="q" x1="320" y1="232" x2="452" y2="232" marker-end="url(#p2q)"></line>
+          <text class="t-q" x="386" y="222" text-anchor="middle">iptables DNAT</text>
+
+          <!-- docker net -->
+          <rect class="zone-in" x="380" y="140" width="420" height="440" rx="10"></rect>
+          <text class="t-zone" x="396" y="164">docker network  common</text>
+          <text class="t-zone" x="396" y="182">172.18.0.0/16 · gw 172.18.0.1</text>
+
+          <rect class="box" x="460" y="196" width="280" height="80" rx="4"></rect>
+          <text class="t"     x="600" y="224" text-anchor="middle">npm_1 · npmplus</text>
+          <text class="t-sub" x="600" y="244" text-anchor="middle">172.18.0.2</text>
+          <text class="t-sub" x="600" y="264" text-anchor="middle">TLS 종료 · 리버스 프록시</text>
+
+          <line class="q" x1="600" y1="276" x2="600" y2="330" marker-end="url(#p2q)"></line>
+          <text class="t-q" x="612" y="298">proxy_pass</text>
+          <text class="t-rf" x="612" y="316">p-14044-1_1 : 8080</text>
+
+          <rect class="box-out" x="460" y="336" width="280" height="84" rx="4"></rect>
+          <text class="t"     x="600" y="364" text-anchor="middle">p-14044-1_1</text>
+          <text class="t-an"  x="600" y="386" text-anchor="middle">아직 없음 → 502</text>
+          <text class="t-note" x="600" y="406" text-anchor="middle">16강에서 생성</text>
+
+          <path class="link" d="M 600 420 L 600 446 L 495 446 L 495 468" marker-end="url(#p2nk)"></path>
+          <path class="link" d="M 600 420 L 600 446 L 700 446 L 700 468" marker-end="url(#p2nk)"></path>
+
+          <rect class="box" x="410" y="474" width="170" height="64" rx="4"></rect>
+          <text class="t"     x="495" y="500" text-anchor="middle">mysql_1</text>
+          <text class="t-sub" x="495" y="520" text-anchor="middle">172.18.0.4:3306</text>
+
+          <rect class="box" x="615" y="474" width="170" height="64" rx="4"></rect>
+          <text class="t"     x="700" y="500" text-anchor="middle">redis_1</text>
+          <text class="t-sub" x="700" y="520" text-anchor="middle">172.18.0.3:6379</text>
+
+          <!-- side note -->
+          <rect class="box-out" x="828" y="196" width="164" height="146" rx="4"></rect>
+          <text class="t-note" x="844" y="222">앱 컨테이너는</text>
+          <text class="t-note" x="844" y="242">-p 옵션 없이 실행</text>
+          <text class="t-note" x="844" y="268">8080은 호스트에</text>
+          <text class="t-note" x="844" y="288">게시되지 않는다</text>
+          <text class="t-note" x="844" y="314">→ _1 과 _2 가 동시에</text>
+          <text class="t-note" x="844" y="334">떠도 포트 충돌 없음</text>
+
+          <text class="t-note" x="46" y="632">MySQL 계정을 'lldjlocal'@'172.18.%.%' 로 만든 이유 — 앱이 이 대역에서 접속한다</text>
+        </svg>
+      </div>
+      <figcaption>
+        외부에 열린 건 <code>npm_1</code>뿐이다. 앱 컨테이너가 포트를 게시하지 않는 설계가 19강 무중단 배포의 전제 — <b>같은 8080을 쓰는 두 컨테이너가 동시에 살아 있을 수 있어야</b> 전환이 성립한다.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ PLATE 03 ============ -->
+  <section class="plate">
+    <div class="plate-head">
+      <span class="plate-num">03</span>
+      <h2 class="plate-title">하나의 IP, 여러 목적지 — 포트가 1차, 이름이 2차 분기</h2>
+    </div>
+
+    <figure>
+      <div class="canvas">
+        <svg viewBox="0 0 1080 490" role="img"
+             aria-label="같은 IP로 들어온 443 요청과 81 요청이 포트로 먼저 갈리고, 443 요청은 TLS SNI와 HTTP Host 헤더로 프록시 호스트를 찾아 스프링부트 컨테이너로 전달되는 구조">
+          <defs>
+            <marker id="p3q" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <polygon class="mk-q" points="0,0 10,5 0,10"></polygon>
+            </marker>
+            <marker id="p3an" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <polygon class="mk-an" points="0,0 10,5 0,10"></polygon>
+            </marker>
+          </defs>
+
+          <rect class="box" x="30" y="76" width="230" height="72" rx="4"></rect>
+          <text class="t"     x="145" y="104" text-anchor="middle">api.jomin4.cloud</text>
+          <text class="t-sub" x="145" y="126" text-anchor="middle">: 443   서비스</text>
+
+          <rect class="box" x="30" y="300" width="230" height="72" rx="4"></rect>
+          <text class="t"     x="145" y="328" text-anchor="middle">jomin4.cloud</text>
+          <text class="t-sub" x="145" y="350" text-anchor="middle">: 81   관리 콘솔</text>
+
+          <line class="q" x1="260" y1="112" x2="304" y2="112" marker-end="url(#p3q)"></line>
+          <line class="q" x1="260" y1="336" x2="304" y2="336" marker-end="url(#p3q)"></line>
+
+          <rect class="box-key" x="310" y="60" width="96" height="340" rx="6"></rect>
+          <text class="t-an" x="358" y="230" text-anchor="middle" font-size="14"
+                transform="rotate(-90 358 230)">3.37.29.175</text>
+
+          <text class="t-note" x="358" y="424" text-anchor="middle">IP 계층에선</text>
+          <text class="t-note" x="358" y="442" text-anchor="middle">둘이 구분되지 않는다</text>
+
+          <line class="q" x1="406" y1="112" x2="454" y2="112" marker-end="url(#p3q)"></line>
+          <line class="q" x1="406" y1="336" x2="454" y2="336" marker-end="url(#p3q)"></line>
+
+          <rect class="box" x="460" y="62" width="280" height="120" rx="4"></rect>
+          <text class="t"     x="600" y="90" text-anchor="middle">npmplus : 443</text>
+          <text class="t-sub" x="600" y="114" text-anchor="middle">TLS SNI → 인증서 선택</text>
+          <text class="t-sub" x="600" y="136" text-anchor="middle">HTTP Host → Proxy Host</text>
+          <text class="t-sub" x="600" y="162" text-anchor="middle">api.jomin4.cloud 매칭</text>
+
+          <rect class="box" x="460" y="288" width="280" height="100" rx="4"></rect>
+          <text class="t"     x="600" y="316" text-anchor="middle">npmplus : 81</text>
+          <text class="t-sub" x="600" y="340" text-anchor="middle">관리 UI · 이름 무관</text>
+          <text class="t-sub" x="600" y="362" text-anchor="middle">자체 서명 인증서</text>
+
+          <line class="q" x1="740" y1="112" x2="794" y2="112" marker-end="url(#p3q)"></line>
+          <text class="t-q" x="767" y="100" text-anchor="middle">proxy</text>
+          <line class="q" x1="740" y1="336" x2="794" y2="336" marker-end="url(#p3q)"></line>
+
+          <rect class="box-out" x="800" y="70" width="250" height="100" rx="4"></rect>
+          <text class="t"     x="925" y="100" text-anchor="middle">p-14044-1_1 : 8080</text>
+          <text class="t-an"  x="925" y="126" text-anchor="middle">아직 없음 → 502</text>
+          <text class="t-note" x="925" y="150" text-anchor="middle">Let's Encrypt 인증서는 정상</text>
+
+          <rect class="box" x="800" y="300" width="250" height="76" rx="4"></rect>
+          <text class="t"     x="925" y="328" text-anchor="middle">Proxy Host 설정 화면</text>
+          <text class="t-sub" x="925" y="350" text-anchor="middle">업스트림 · 인증서 관리</text>
+
+          <text class="t-note" x="30" y="470">도메인을 100개 붙여도 EC2 한 대 · IP 하나면 된다 — 이것이 리버스 프록시의 존재 이유</text>
+        </svg>
+      </div>
+      <figcaption>
+        두 이름은 같은 IP에 도달한 뒤 <b>포트로 먼저</b> 갈리고, 443 안에서 다시 <b>SNI와 Host 헤더로</b> 갈린다. 19강 무중단 배포가 바꾸는 값은 이 그림의 맨 오른쪽 화살표 — 업스트림 하나뿐이다.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ PLATE 04 ============ -->
+  <section class="plate">
+    <div class="plate-head">
+      <span class="plate-num">04</span>
+      <h2 class="plate-title">이름의 유효 범위 — 어디까지 통하는가</h2>
+    </div>
+
+    <figure>
+      <div class="canvas">
+        <svg viewBox="0 0 1000 440" role="img"
+             aria-label="공개 인터넷, EC2 호스트, 도커 common 네트워크 세 범위에서 각 이름이 해석되는 범위를 막대로 표시한 도표. 컨테이너 이름은 도커 네트워크 안에서만 유효하다">
+          <rect class="zone" x="40"  y="98" width="290" height="284" rx="8"></rect>
+          <rect class="zone" x="350" y="98" width="290" height="284" rx="8"></rect>
+          <rect class="zone-in" x="660" y="98" width="300" height="284" rx="8"></rect>
+
+          <text class="t"      x="185" y="66" text-anchor="middle">공개 인터넷</text>
+          <text class="t-sub"  x="185" y="86" text-anchor="middle">공개 DNS</text>
+          <text class="t"      x="495" y="66" text-anchor="middle">EC2 호스트 OS</text>
+          <text class="t-sub"  x="495" y="86" text-anchor="middle">/etc/resolv.conf</text>
+          <text class="t"      x="810" y="66" text-anchor="middle">docker · common</text>
+          <text class="t-sub"  x="810" y="86" text-anchor="middle">내장 DNS 127.0.0.11</text>
+
+          <rect class="bar" x="56" y="132" width="888" height="52" rx="4"></rect>
+          <text class="t"     x="80" y="153">api.jomin4.cloud</text>
+          <text class="t-sub" x="80" y="172">→ 3.37.29.175 · 어디서나 해석</text>
+
+          <rect class="bar" x="366" y="212" width="578" height="52" rx="4"></rect>
+          <text class="t"     x="390" y="233">10.0.1.160</text>
+          <text class="t-sub" x="390" y="252">VPC 사설 IP · 인터넷에선 무의미</text>
+          <text class="t-rf"  x="185" y="243" text-anchor="middle">도달 불가</text>
+
+          <rect class="bar-key" x="676" y="292" width="268" height="52" rx="4"></rect>
+          <text class="t"     x="700" y="313">p-14044-1_1</text>
+          <text class="t-sub" x="700" y="332">→ 172.18.0.x</text>
+          <text class="t-rf"  x="185" y="323" text-anchor="middle">해석 불가</text>
+          <text class="t-rf"  x="495" y="323" text-anchor="middle">해석 불가 · 호스트도 모른다</text>
+
+          <text class="t-note" x="40" y="416">브라우저에 p-14044-1_1 을 칠 수 없는 이유 — 도커가 컨테이너에게만 주입하는 DNS 안에서만 존재하는 이름이다</text>
+        </svg>
+      </div>
+      <figcaption>
+        디버깅은 이름이 통하는 자리에서 해야 한다. <code>docker exec npm_1 curl http://p-14044-1_1:8080</code> 처럼 <b>같은 네트워크 안의 컨테이너를 거쳐</b> 들어가는 방식이 19강 헬스체크가 쓰는 방법이다.
+      </figcaption>
+    </figure>
+  </section>
+
+</div>

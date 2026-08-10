@@ -1,0 +1,347 @@
+<title>http → https → www · 리다이렉트 3번의 왕복</title>
+<style>
+  :root{
+    --canvas:#fdfdfd; --dot:#dcdcdc; --ink:#1e1e1e; --muted:#868e96; --line:#c9c9c9;
+    --blue:#1971c2;  --blue-bg:#a5d8ff;
+    --red:#e03131;   --red-bg:#ffc9c9;
+    --green:#2f9e44; --green-bg:#b2f2bb;
+    --amber:#e8890c; --amber-bg:#ffec99;
+    --violet:#6741d9;--violet-bg:#d0bfff;
+    --card:#ffffff;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --canvas:#121212; --dot:#2b2b2b; --ink:#e3e3e3; --muted:#909296; --line:#3a3a3a;
+      --blue:#74c0fc;  --blue-bg:#1b3b5c;
+      --red:#ff8787;   --red-bg:#5c2626;
+      --green:#69db7c; --green-bg:#1e4529;
+      --amber:#ffd43b; --amber-bg:#544217;
+      --violet:#b197fc;--violet-bg:#3a2f63;
+      --card:#1a1a1a;
+    }
+  }
+  :root[data-theme="dark"]{
+    --canvas:#121212; --dot:#2b2b2b; --ink:#e3e3e3; --muted:#909296; --line:#3a3a3a;
+    --blue:#74c0fc;  --blue-bg:#1b3b5c;
+    --red:#ff8787;   --red-bg:#5c2626;
+    --green:#69db7c; --green-bg:#1e4529;
+    --amber:#ffd43b; --amber-bg:#544217;
+    --violet:#b197fc;--violet-bg:#3a2f63;
+    --card:#1a1a1a;
+  }
+  :root[data-theme="light"]{
+    --canvas:#fdfdfd; --dot:#dcdcdc; --ink:#1e1e1e; --muted:#868e96; --line:#c9c9c9;
+    --blue:#1971c2;  --blue-bg:#a5d8ff;
+    --red:#e03131;   --red-bg:#ffc9c9;
+    --green:#2f9e44; --green-bg:#b2f2bb;
+    --amber:#e8890c; --amber-bg:#ffec99;
+    --violet:#6741d9;--violet-bg:#d0bfff;
+    --card:#ffffff;
+  }
+
+  *{box-sizing:border-box}
+
+  body{
+    margin:0;
+    background-color:var(--canvas);
+    background-image:radial-gradient(circle, var(--dot) 1.1px, transparent 1.1px);
+    background-size:26px 26px;
+    color:var(--ink);
+    font-family:"Segoe Print","Bradley Hand","Comic Sans MS","Malgun Gothic","Apple SD Gothic Neo",ui-sans-serif,sans-serif;
+    line-height:1.65;
+  }
+
+  .wrap{max-width:1240px;margin:0 auto;padding:52px 22px 90px;display:flex;flex-direction:column;gap:36px}
+
+  header{display:flex;flex-direction:column;gap:10px;transform:rotate(-.35deg)}
+  .kicker{font-size:13px;letter-spacing:.1em;color:var(--muted)}
+  h1{margin:0;font-size:clamp(26px,4vw,40px);line-height:1.2;font-weight:700;text-wrap:balance}
+  .sub{color:var(--muted);font-size:15px;max-width:60ch}
+
+  .plate{
+    background:var(--card);
+    border:2.2px solid var(--ink);
+    border-radius:14px 12px 15px 11px;
+    padding:22px 22px 18px;
+    display:flex;flex-direction:column;gap:14px;
+    box-shadow:3px 4px 0 rgba(0,0,0,.10);
+  }
+  .plate:nth-of-type(odd){transform:rotate(.18deg)}
+  .plate:nth-of-type(even){transform:rotate(-.18deg)}
+
+  .plate-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .num{
+    font-size:14px;font-weight:700;color:var(--canvas);background:var(--ink);
+    border-radius:50% 48% 52% 50%;width:30px;height:30px;
+    display:inline-flex;align-items:center;justify-content:center;flex:none;
+  }
+  h2{margin:0;font-size:19px;font-weight:700;letter-spacing:-.01em}
+
+  .canvas-box{overflow-x:auto}
+  svg{display:block;width:100%;min-width:720px;height:auto}
+
+  figure{margin:0;display:flex;flex-direction:column;gap:12px}
+  figcaption{font-size:14px;color:var(--muted);max-width:72ch;padding-left:12px;border-left:3px dashed var(--line)}
+  figcaption b{color:var(--ink)}
+
+  /* --- sketch primitives --- */
+  .sk{filter:url(#rough)}
+  .bx      {fill:none;stroke:var(--ink);stroke-width:2.2;stroke-linejoin:round}
+  .bx-dash {fill:none;stroke:var(--muted);stroke-width:2;stroke-dasharray:9 6;stroke-linejoin:round}
+  .card-o  {fill:none;stroke:var(--amber);stroke-width:2.4}
+  .card-b  {fill:none;stroke:var(--blue);stroke-width:2.4}
+  .card-g  {fill:none;stroke:var(--green);stroke-width:2.4;stroke-dasharray:10 6}
+  .ar      {fill:none;stroke:var(--ink);stroke-width:2.2;stroke-linecap:round}
+  .ar-b    {fill:none;stroke:var(--blue);stroke-width:2.4;stroke-linecap:round}
+  .ar-r    {fill:none;stroke:var(--red);stroke-width:2.4;stroke-linecap:round}
+  .ar-g    {fill:none;stroke:var(--green);stroke-width:2.4;stroke-linecap:round}
+  .ar-m    {fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;stroke-dasharray:8 6}
+
+  .t   {fill:var(--ink);font-size:15px;font-weight:700}
+  .ts  {fill:var(--muted);font-size:12.5px}
+  .tu  {fill:var(--ink);font-size:14px}
+  .tb  {fill:var(--blue);font-size:13.5px;font-weight:700}
+  .tr  {fill:var(--red);font-size:13.5px;font-weight:700}
+  .tg  {fill:var(--green);font-size:13.5px;font-weight:700}
+  .ta  {fill:var(--amber);font-size:13px;font-weight:700}
+  .tv  {fill:var(--violet);font-size:13px;font-weight:700}
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="kicker">응용 계층 · 리다이렉트</div>
+    <h1>http → https → www<br>세 번의 완전한 왕복</h1>
+    <p class="sub">서버가 대신 다녀오는 게 아니라, 브라우저를 되돌려 보낸다. 그래서 요청이 세 개다.</p>
+  </header>
+
+  <!-- ============ PLATE 1 ============ -->
+  <section class="plate">
+    <div class="plate-head"><span class="num">1</span><h2>왕복마다 무엇이 새로 시작되나</h2></div>
+
+    <figure>
+      <div class="canvas-box">
+        <svg viewBox="0 0 1200 830" role="img"
+             aria-label="브라우저가 세 번의 독립된 요청을 보내는 과정. 첫 번째는 http로 nginx 80포트에서 301을 받고, 두 번째는 https로 nginx 443포트에서 www로 가라는 301을 받고, 세 번째는 www 도메인의 다른 서버로 간다">
+          <defs>
+            <filter id="rough" x="-6%" y="-6%" width="112%" height="112%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.016 0.022" numOctaves="2" seed="7" result="n"/>
+              <feDisplacementMap in="SourceGraphic" in2="n" scale="2.6" xChannelSelector="R" yChannelSelector="G"/>
+            </filter>
+            <pattern id="hA" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+              <line x1="0" y1="0" x2="0" y2="7" stroke="var(--amber-bg)" stroke-width="3"/>
+            </pattern>
+            <pattern id="hB" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+              <line x1="0" y1="0" x2="0" y2="7" stroke="var(--blue-bg)" stroke-width="3"/>
+            </pattern>
+            <pattern id="hG" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+              <line x1="0" y1="0" x2="0" y2="7" stroke="var(--green-bg)" stroke-width="3"/>
+            </pattern>
+            <marker id="hd" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0,0 L10,5 L0,10" fill="none" stroke="context-stroke" stroke-width="2" stroke-linecap="round"/>
+            </marker>
+          </defs>
+
+          <!-- ================= CARD 1 ================= -->
+          <g class="sk">
+            <rect class="card-o" x="46" y="100" width="1108" height="190" rx="14"></rect>
+            <rect class="bx" x="95" y="138" width="150" height="80" rx="8" fill="url(#hA)"></rect>
+            <rect class="bx" x="790" y="130" width="315" height="96" rx="8"></rect>
+            <path class="ar-b" d="M250,162 L780,162" marker-end="url(#hd)"></path>
+            <path class="ar-r" d="M784,200 L255,200" marker-end="url(#hd)"></path>
+            <rect class="bx-dash" x="300" y="248" width="168" height="32" rx="8"></rect>
+            <rect class="bx-dash" x="490" y="248" width="178" height="32" rx="8"></rect>
+            <rect class="bx-dash" x="690" y="248" width="178" height="32" rx="8"></rect>
+          </g>
+          <text class="ta" x="62" y="124">왕복 ①   평문 구간</text>
+          <text class="t"  x="170" y="176" text-anchor="middle">브라우저</text>
+          <text class="ts" x="170" y="196" text-anchor="middle">주소창: jomin4.cloud</text>
+          <text class="t"  x="947" y="168" text-anchor="middle">nginx  :80</text>
+          <text class="ts" x="947" y="190" text-anchor="middle">이름 상관없이 전부 여기로</text>
+          <text class="ta" x="947" y="212" text-anchor="middle">규칙 A — Force HTTPS</text>
+          <text class="tb" x="515" y="152" text-anchor="middle">GET  http://jomin4.cloud</text>
+          <text class="tr" x="520" y="222" text-anchor="middle">301   Location: https://jomin4.cloud/</text>
+          <text class="ts" x="384" y="269" text-anchor="middle">DNS 조회 → 3.37.29.175</text>
+          <text class="ts" x="579" y="269" text-anchor="middle">TCP 새 연결 (80)</text>
+          <text class="ta" x="779" y="269" text-anchor="middle">TLS 없음 — 평문</text>
+
+          <!-- connector 1→2 -->
+          <g class="sk"><path class="ar-m" d="M170,292 L170,330" marker-end="url(#hd)"></path></g>
+          <text class="ts" x="186" y="318">브라우저가 다시 요청</text>
+
+          <!-- ================= CARD 2 ================= -->
+          <g class="sk">
+            <rect class="card-b" x="46" y="340" width="1108" height="190" rx="14"></rect>
+            <rect class="bx" x="95" y="378" width="150" height="80" rx="8" fill="url(#hB)"></rect>
+            <rect class="bx" x="790" y="370" width="315" height="96" rx="8"></rect>
+            <path class="ar-b" d="M250,402 L780,402" marker-end="url(#hd)"></path>
+            <path class="ar-r" d="M784,440 L255,440" marker-end="url(#hd)"></path>
+            <rect class="bx-dash" x="300" y="488" width="168" height="32" rx="8"></rect>
+            <rect class="bx-dash" x="490" y="488" width="178" height="32" rx="8"></rect>
+            <rect class="bx-dash" x="690" y="488" width="178" height="32" rx="8"></rect>
+          </g>
+          <text class="tb" x="62" y="364">왕복 ②   암호화 구간</text>
+          <text class="t"  x="170" y="416" text-anchor="middle">브라우저</text>
+          <text class="ts" x="170" y="436" text-anchor="middle">주소창: jomin4.cloud</text>
+          <text class="t"  x="947" y="408" text-anchor="middle">nginx  :443</text>
+          <text class="ts" x="947" y="430" text-anchor="middle">SNI = jomin4.cloud 로 블록 선택</text>
+          <text class="tb" x="947" y="452" text-anchor="middle">규칙 B — Redirection Host</text>
+          <text class="tb" x="515" y="392" text-anchor="middle">GET  https://jomin4.cloud</text>
+          <text class="tr" x="520" y="462" text-anchor="middle">301   Location: https://www.jomin4.cloud/</text>
+          <text class="ts" x="384" y="509" text-anchor="middle">DNS 캐시 재사용</text>
+          <text class="ts" x="579" y="509" text-anchor="middle">TCP 새 연결 (443)</text>
+          <text class="tb" x="779" y="509" text-anchor="middle">TLS 핸드셰이크 발생</text>
+
+          <!-- connector 2→3 -->
+          <g class="sk"><path class="ar-m" d="M170,532 L170,570" marker-end="url(#hd)"></path></g>
+          <text class="ts" x="186" y="558">브라우저가 또 요청</text>
+
+          <!-- ================= CARD 3 ================= -->
+          <g class="sk">
+            <rect class="card-g" x="46" y="580" width="1108" height="196" rx="14"></rect>
+            <rect class="bx" x="95" y="618" width="150" height="80" rx="8" fill="url(#hG)"></rect>
+            <rect class="bx-dash" x="790" y="610" width="315" height="96" rx="8"></rect>
+            <path class="ar-g" d="M250,642 L780,642" marker-end="url(#hd)"></path>
+            <path class="ar-m" d="M784,680 L255,680" marker-end="url(#hd)"></path>
+            <rect class="bx-dash" x="300" y="728" width="168" height="32" rx="8"></rect>
+            <rect class="bx-dash" x="490" y="728" width="178" height="32" rx="8"></rect>
+            <rect class="bx-dash" x="690" y="728" width="178" height="32" rx="8"></rect>
+          </g>
+          <text class="tg" x="62" y="604">왕복 ③   목적지 — 다른 서버!</text>
+          <text class="t"  x="170" y="656" text-anchor="middle">브라우저</text>
+          <text class="tg" x="170" y="676" text-anchor="middle">주소창이 바뀜 →</text>
+          <text class="t"  x="947" y="648" text-anchor="middle">Vercel  (EC2 아님)</text>
+          <text class="ts" x="947" y="670" text-anchor="middle">28~29강에서 연결 예정</text>
+          <text class="tv" x="947" y="692" text-anchor="middle">지금은 NXDOMAIN</text>
+          <text class="tg" x="515" y="632" text-anchor="middle">GET  https://www.jomin4.cloud</text>
+          <text class="ts" x="520" y="702" text-anchor="middle">200  최종 콘텐츠</text>
+          <text class="tv" x="384" y="749" text-anchor="middle">DNS 새로 조회!</text>
+          <text class="ts" x="579" y="749" text-anchor="middle">TCP 새 연결</text>
+          <text class="tv" x="779" y="749" text-anchor="middle">TLS — 다른 인증서</text>
+
+          <text class="ts" x="46" y="806">파란 화살표 = 요청 · 빨간 화살표 = 301 응답 · 점선 = 아직 없는 구간</text>
+        </svg>
+      </div>
+      <figcaption>
+        <b>①과 ② 사이에 연결 재사용이 없다.</b> 같은 IP지만 포트가 80과 443으로 다르고 한쪽은 평문이라 아예 다른 통로다. 앞서 본 TLS 핸드셰이크가 ②에서 통째로 한 번 일어난다. ③은 DNS부터 서버까지 전부 남남이다.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ PLATE 2 ============ -->
+  <section class="plate">
+    <div class="plate-head"><span class="num">2</span><h2>nginx는 (포트 + 이름) 으로 담당 블록을 고른다</h2></div>
+
+    <figure>
+      <div class="canvas-box">
+        <svg viewBox="0 0 1160 560" role="img"
+             aria-label="nginx가 포트와 SNI 이름 조합으로 서버 블록을 선택하는 규칙표. 80포트는 Force HTTPS, 443포트는 이름에 따라 프록시 호스트, 리다이렉션 호스트, 기본 블록으로 갈린다">
+          <defs>
+            <marker id="hd2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0,0 L10,5 L0,10" fill="none" stroke="context-stroke" stroke-width="2" stroke-linecap="round"/>
+            </marker>
+          </defs>
+
+          <text class="ts" x="60"  y="52">들어온 (포트, 이름)</text>
+          <text class="ts" x="470" y="52">담당 server 블록</text>
+          <text class="ts" x="850" y="52">결과</text>
+
+          <g class="sk">
+            <path class="ar-m" d="M50,66 L1110,66"></path>
+
+            <rect class="bx" x="50"  y="86"  width="360" height="66" rx="9"></rect>
+            <rect class="card-o" x="450" y="86"  width="330" height="66" rx="9"></rect>
+            <rect class="bx" x="820" y="86"  width="290" height="66" rx="9"></rect>
+            <path class="ar" d="M414,119 L444,119" marker-end="url(#hd2)"></path>
+            <path class="ar" d="M784,119 L814,119" marker-end="url(#hd2)"></path>
+
+            <rect class="bx" x="50"  y="176" width="360" height="66" rx="9"></rect>
+            <rect class="card-b" x="450" y="176" width="330" height="66" rx="9"></rect>
+            <rect class="bx" x="820" y="176" width="290" height="66" rx="9"></rect>
+            <path class="ar" d="M414,209 L444,209" marker-end="url(#hd2)"></path>
+            <path class="ar" d="M784,209 L814,209" marker-end="url(#hd2)"></path>
+
+            <rect class="bx" x="50"  y="266" width="360" height="66" rx="9"></rect>
+            <rect class="card-b" x="450" y="266" width="330" height="66" rx="9"></rect>
+            <rect class="bx" x="820" y="266" width="290" height="66" rx="9"></rect>
+            <path class="ar" d="M414,299 L444,299" marker-end="url(#hd2)"></path>
+            <path class="ar" d="M784,299 L814,299" marker-end="url(#hd2)"></path>
+
+            <rect class="bx-dash" x="50"  y="356" width="360" height="66" rx="9"></rect>
+            <rect class="bx-dash" x="450" y="356" width="330" height="66" rx="9"></rect>
+            <rect class="bx-dash" x="820" y="356" width="290" height="66" rx="9"></rect>
+            <path class="ar-m" d="M414,389 L444,389" marker-end="url(#hd2)"></path>
+            <path class="ar-m" d="M784,389 L814,389" marker-end="url(#hd2)"></path>
+
+            <rect class="card-o" x="50" y="452" width="1060" height="76" rx="12"></rect>
+          </g>
+
+          <text class="tu" x="70"  y="115">:80  +  아무 이름</text>
+          <text class="ts" x="70"  y="138">평문으로 들어온 모든 요청</text>
+          <text class="ta" x="470" y="125">Force HTTPS</text>
+          <text class="tu" x="840" y="115">301 → 같은 주소의 https</text>
+          <text class="ts" x="840" y="138">왕복 ①</text>
+
+          <text class="tu" x="70"  y="205">:443  +  api.jomin4.cloud</text>
+          <text class="ts" x="70"  y="228">인증서 id=1 보유</text>
+          <text class="tb" x="470" y="215">Proxy Host</text>
+          <text class="tu" x="840" y="205">p-14044-1_1 : 8080</text>
+          <text class="ts" x="840" y="228">컨테이너로 전달</text>
+
+          <text class="tu" x="70"  y="295">:443  +  jomin4.cloud</text>
+          <text class="ts" x="70"  y="318">인증서 id=2 보유</text>
+          <text class="tb" x="470" y="305">Redirection Host</text>
+          <text class="tu" x="840" y="295">301 → www.jomin4.cloud</text>
+          <text class="ts" x="840" y="318">왕복 ②</text>
+
+          <text class="ts" x="70"  y="385">:443  +  등록 안 된 이름</text>
+          <text class="ts" x="70"  y="408">또는 인증서가 없는 이름</text>
+          <text class="ts" x="470" y="395">기본 블록 (fallback)</text>
+          <text class="ts" x="840" y="385">“Congratulations!” 페이지</text>
+          <text class="ts" x="840" y="408">호스트가 설정 안 됨</text>
+
+          <text class="ta" x="72" y="482">인증서가 없으면 그 이름의 :443 블록 자체가 만들어지지 않는다.</text>
+          <text class="ts" x="72" y="506">그래서 맨 아래 기본 블록으로 떨어진다 — 우리가 겪은 “Congratulations” 화면의 정체.</text>
+        </svg>
+      </div>
+      <figcaption>
+        같은 IP·같은 포트라도 <b>이름이 다르면 다른 블록</b>이 처리한다. 이름은 TLS 핸드셰이크의 SNI에서 먼저 읽고, 복호화 후 Host 헤더로 한 번 더 확인한다.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ PLATE 3 ============ -->
+  <section class="plate">
+    <div class="plate-head"><span class="num">3</span><h2>기억할 그림 — 우편물 반송</h2></div>
+
+    <figure>
+      <div class="canvas-box">
+        <svg viewBox="0 0 1160 300" role="img"
+             aria-label="301 리다이렉트를 우편물 반송에 비유한 그림. 옛 주소로 보낸 소포가 새 주소 스티커와 함께 되돌아오고 발신인이 다시 보낸다">
+          <g class="sk">
+            <rect class="bx" x="60"  y="90" width="210" height="90" rx="9"></rect>
+            <rect class="card-o" x="440" y="90" width="240" height="90" rx="9"></rect>
+            <rect class="bx" x="880" y="90" width="220" height="90" rx="9"></rect>
+            <path class="ar-b" d="M274,116 L434,116" marker-end="url(#hd2)"></path>
+            <path class="ar-r" d="M434,156 L276,156" marker-end="url(#hd2)"></path>
+            <path class="ar-g" d="M170,190 C170,250 700,250 985,190" marker-end="url(#hd2)"></path>
+          </g>
+          <text class="t"  x="165" y="128" text-anchor="middle">나 (브라우저)</text>
+          <text class="ts" x="165" y="152" text-anchor="middle">소포를 부친다</text>
+          <text class="t"  x="560" y="122" text-anchor="middle">옛 주소</text>
+          <text class="ta" x="560" y="146" text-anchor="middle">“이사 갔습니다”</text>
+          <text class="ts" x="560" y="168" text-anchor="middle">새 주소 스티커를 붙여 반송</text>
+          <text class="t"  x="990" y="128" text-anchor="middle">새 주소</text>
+          <text class="ts" x="990" y="152" text-anchor="middle">여기서 진짜 배달</text>
+          <text class="tb" x="354" y="106" text-anchor="middle">요청</text>
+          <text class="tr" x="354" y="176" text-anchor="middle">301</text>
+          <text class="tg" x="580" y="272" text-anchor="middle">내가 직접 다시 부친다 — 우체국이 대신 가주지 않는다</text>
+        </svg>
+      </div>
+      <figcaption>
+        301은 “영구 이사”라서 <b>브라우저가 새 주소를 수첩에 적어둔다</b>. 다음부터는 네트워크에 나가지도 않고 곧장 새 주소로 간다 — 그래서 잘못 설정한 리다이렉트는 고쳐도 안 바뀌는 것처럼 보인다. 테스트는 시크릿 창이나 <span style="font-family:ui-monospace,monospace">curl</span> 로.
+      </figcaption>
+    </figure>
+  </section>
+
+</div>

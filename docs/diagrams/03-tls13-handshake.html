@@ -1,0 +1,264 @@
+<title>TLS 1.3 핸드셰이크 · 어디서부터 암호화되는가</title>
+<style>
+  :root {
+    --ground:#EEF1F5; --surface:#FFFFFF; --ink:#16243A; --ink-soft:#5D6B7E;
+    --ink-faint:#93A0B0; --rule:#CBD4DF; --rule-soft:#E1E7EE;
+    --query:#3B54A0; --answer:#CC4419;
+    --enc-wash:rgba(59,84,160,.055); --plain-wash:rgba(204,68,25,.06); --chip:#E7EBF1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:#0D141C; --surface:#151F2A; --ink:#E3EAF3; --ink-soft:#93A3B6;
+      --ink-faint:#66788C; --rule:#2B3B4D; --rule-soft:#22303F;
+      --query:#8AA0EA; --answer:#FF7C4D;
+      --enc-wash:rgba(138,160,234,.075); --plain-wash:rgba(255,124,77,.085); --chip:#1E2A37;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0D141C; --surface:#151F2A; --ink:#E3EAF3; --ink-soft:#93A3B6;
+    --ink-faint:#66788C; --rule:#2B3B4D; --rule-soft:#22303F;
+    --query:#8AA0EA; --answer:#FF7C4D;
+    --enc-wash:rgba(138,160,234,.075); --plain-wash:rgba(255,124,77,.085); --chip:#1E2A37;
+  }
+  :root[data-theme="light"] {
+    --ground:#EEF1F5; --surface:#FFFFFF; --ink:#16243A; --ink-soft:#5D6B7E;
+    --ink-faint:#93A0B0; --rule:#CBD4DF; --rule-soft:#E1E7EE;
+    --query:#3B54A0; --answer:#CC4419;
+    --enc-wash:rgba(59,84,160,.055); --plain-wash:rgba(204,68,25,.06); --chip:#E7EBF1;
+  }
+
+  * { box-sizing:border-box; }
+
+  body {
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:"Pretendard","Pretendard Variable","Apple SD Gothic Neo","Malgun Gothic",
+                ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased; line-height:1.6;
+  }
+
+  .wrap { max-width:1180px; margin:0 auto; padding:56px 24px 96px;
+          display:flex; flex-direction:column; gap:40px; }
+
+  header { display:flex; flex-direction:column; gap:14px; }
+  .eyebrow { font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace;
+             font-size:11.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
+  h1 { margin:0; font-size:clamp(30px,4.6vw,46px); line-height:1.12;
+       letter-spacing:-.022em; font-weight:750; text-wrap:balance; }
+  h1 .dim { color:var(--ink-soft); font-weight:500; }
+
+  .facts { display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+  .fact { font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace;
+          font-size:12px; padding:5px 11px; border-radius:3px;
+          background:var(--chip); color:var(--ink-soft); white-space:nowrap; }
+  .fact b { color:var(--ink); font-weight:600; }
+
+  .plate { background:var(--surface); border:1px solid var(--rule-soft); border-radius:4px;
+           padding:26px 26px 22px; display:flex; flex-direction:column; gap:18px; }
+  .plate-head { display:flex; align-items:baseline; gap:14px;
+                padding-bottom:14px; border-bottom:1px solid var(--rule-soft); }
+  .plate-num { font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace;
+               font-size:11.5px; letter-spacing:.14em; color:var(--answer); font-weight:600; flex:none; }
+  .plate-title { margin:0; font-size:19px; font-weight:650; letter-spacing:-.012em; }
+
+  figure { margin:0; display:flex; flex-direction:column; gap:14px; }
+  .canvas { overflow-x:auto; }
+  svg { display:block; width:100%; min-width:780px; height:auto; }
+
+  figcaption { font-size:13.5px; color:var(--ink-soft); max-width:74ch;
+               border-left:2px solid var(--rule); padding-left:14px; }
+  figcaption b { color:var(--ink); font-weight:600; }
+  figcaption code { font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace;
+                    font-size:12.5px; color:var(--ink); }
+
+  .box      { fill:var(--surface); stroke:var(--rule); stroke-width:1.4; }
+  .box-key  { fill:var(--surface); stroke:var(--answer); stroke-width:1.8; }
+  .note     { fill:none; stroke:var(--rule); stroke-width:1.3; stroke-dasharray:5 4; }
+  .band-p   { fill:var(--plain-wash); stroke:none; }
+  .band-e   { fill:var(--enc-wash); stroke:none; }
+  .band-line{ stroke:var(--rule); stroke-width:1; stroke-dasharray:4 5; fill:none; }
+  .cut      { stroke:var(--answer); stroke-width:2; fill:none; }
+  .cut2     { stroke:var(--query); stroke-width:1.8; fill:none; stroke-dasharray:8 5; }
+  .lifeline { stroke:var(--rule); stroke-width:1; stroke-dasharray:3 5; }
+  .step-ring{ fill:none; stroke:var(--rule); stroke-width:1.3; }
+
+  .plain { stroke:var(--answer); stroke-width:2.2; fill:none; }
+  .enc   { stroke:var(--query); stroke-width:2.2; fill:none; }
+  .mk-plain { fill:var(--answer); }
+  .mk-enc   { fill:var(--query); }
+
+  .t       { fill:var(--ink); font-size:13.5px; font-weight:650;
+             font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",ui-sans-serif,sans-serif; }
+  .t-msg   { fill:var(--ink); font-size:13px; font-weight:650;
+             font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace; }
+  .t-sub   { fill:var(--ink-soft); font-size:11px;
+             font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace; }
+  .t-plain { fill:var(--answer); font-size:11.5px; font-weight:700;
+             font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace; }
+  .t-enc   { fill:var(--query); font-size:11.5px; font-weight:700;
+             font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace; }
+  .t-zone  { fill:var(--ink-faint); font-size:11.5px; letter-spacing:.08em;
+             font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace; }
+  .t-note  { fill:var(--ink-faint); font-size:11.5px; letter-spacing:.04em;
+             font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",ui-sans-serif,sans-serif; }
+  .t-step  { fill:var(--ink-soft); font-size:11.5px; font-weight:700;
+             font-family:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace; }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">phase 3 — tls handshake</div>
+    <h1>암호화는 언제 시작되나<br><span class="dim">브라우저 ↔ npmplus 사이 TLS 1.3 핸드셰이크</span></h1>
+    <div class="facts">
+      <span class="fact">프로토콜 <b>TLS 1.3</b></span>
+      <span class="fact">스위트 <b>TLS_AES_256_GCM_SHA384</b></span>
+      <span class="fact">인증서 <b>ECDSA P-384</b></span>
+      <span class="fact">키교환 <b>X25519MLKEM768</b></span>
+    </div>
+  </header>
+
+  <section class="plate">
+    <div class="plate-head">
+      <span class="plate-num">01</span>
+      <h2 class="plate-title">평문 2개, 그 뒤로는 전부 암호문 — 인증서조차 감춰진다</h2>
+    </div>
+
+    <figure>
+      <div class="canvas">
+        <svg viewBox="0 0 1240 900" role="img"
+             aria-label="TLS 1.3 핸드셰이크 시퀀스. ClientHello와 ServerHello만 평문으로 오가고, 그 직후 도출된 핸드셰이크 키로 인증서와 CertificateVerify, Finished가 암호화되며, 이후 애플리케이션 키로 HTTP/2 데이터가 암호화된다">
+          <defs>
+            <marker id="hp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <polygon class="mk-plain" points="0,0 10,5 0,10"></polygon>
+            </marker>
+            <marker id="he" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <polygon class="mk-enc" points="0,0 10,5 0,10"></polygon>
+            </marker>
+          </defs>
+
+          <!-- bands -->
+          <rect class="band-p" x="60" y="100" width="940" height="206" rx="8"></rect>
+          <rect class="band-e" x="60" y="306" width="940" height="294" rx="8"></rect>
+          <rect class="band-e" x="60" y="600" width="940" height="208" rx="8"></rect>
+
+          <text class="t-zone" x="76" y="124">평문 구간 — 아직 공유 키가 없다</text>
+          <text class="t-zone" x="76" y="330">핸드셰이크 키로 암호화</text>
+          <text class="t-zone" x="76" y="624">애플리케이션 키로 암호화</text>
+
+          <!-- lane headers -->
+          <rect class="box" x="80" y="28" width="240" height="56" rx="4"></rect>
+          <text class="t"     x="200" y="52" text-anchor="middle">브라우저</text>
+          <text class="t-sub" x="200" y="71" text-anchor="middle">Chrome · TLS 클라이언트</text>
+
+          <rect class="box-key" x="740" y="28" width="240" height="56" rx="4"></rect>
+          <text class="t"     x="860" y="52" text-anchor="middle">npmplus · nginx</text>
+          <text class="t-sub" x="860" y="71" text-anchor="middle">api.jomin4.cloud : 443</text>
+
+          <line class="lifeline" x1="200" y1="88" x2="200" y2="808"></line>
+          <line class="lifeline" x1="860" y1="88" x2="860" y2="808"></line>
+
+          <!-- 1 ClientHello -->
+          <circle class="step-ring" cx="32" cy="148" r="13"></circle>
+          <text class="t-step" x="32" y="152" text-anchor="middle">1</text>
+          <line class="plain" x1="200" y1="148" x2="854" y2="148" marker-end="url(#hp)"></line>
+          <text class="t-msg"   x="530" y="138" text-anchor="middle">ClientHello</text>
+          <text class="t-plain" x="530" y="170" text-anchor="middle">SNI :  api.jomin4.cloud   ← 이 이름은 끝까지 평문</text>
+          <text class="t-sub"   x="530" y="189" text-anchor="middle">key_share : 내 임시 공개키 (X25519MLKEM768)</text>
+          <text class="t-sub"   x="530" y="207" text-anchor="middle">지원 암호 목록 · 지원 곡선 목록</text>
+          <text class="t-sub"   x="530" y="225" text-anchor="middle">ALPN : h2, http/1.1</text>
+
+          <!-- 2 ServerHello -->
+          <circle class="step-ring" cx="32" cy="256" r="13"></circle>
+          <text class="t-step" x="32" y="260" text-anchor="middle">2</text>
+          <line class="plain" x1="860" y1="256" x2="206" y2="256" marker-end="url(#hp)"></line>
+          <text class="t-msg" x="530" y="246" text-anchor="middle">ServerHello</text>
+          <text class="t-sub" x="530" y="278" text-anchor="middle">선택 : TLS_AES_256_GCM_SHA384</text>
+          <text class="t-sub" x="530" y="296" text-anchor="middle">key_share : 서버 임시 공개키</text>
+
+          <!-- cut line -->
+          <line class="cut" x1="60" y1="306" x2="1000" y2="306"></line>
+          <text class="t-plain" x="992" y="298" text-anchor="end">여기서부터 암호화 시작</text>
+
+          <!-- 3~6 encrypted handshake -->
+          <circle class="step-ring" cx="32" cy="352" r="13"></circle>
+          <text class="t-step" x="32" y="356" text-anchor="middle">3</text>
+          <line class="enc" x1="860" y1="352" x2="206" y2="352" marker-end="url(#he)"></line>
+          <text class="t-msg" x="530" y="342" text-anchor="middle">{EncryptedExtensions}</text>
+          <text class="t-sub" x="530" y="374" text-anchor="middle">ALPN = h2 확정</text>
+
+          <circle class="step-ring" cx="32" cy="408" r="13"></circle>
+          <text class="t-step" x="32" y="412" text-anchor="middle">4</text>
+          <line class="enc" x1="860" y1="408" x2="206" y2="408" marker-end="url(#he)"></line>
+          <text class="t-msg" x="530" y="398" text-anchor="middle">{Certificate}</text>
+          <text class="t-sub" x="530" y="430" text-anchor="middle">EC P-384 · Let's Encrypt 체인 5단계 · 유효 6일</text>
+
+          <circle class="step-ring" cx="32" cy="464" r="13"></circle>
+          <text class="t-step" x="32" y="468" text-anchor="middle">5</text>
+          <line class="enc" x1="860" y1="464" x2="206" y2="464" marker-end="url(#he)"></line>
+          <text class="t-msg" x="530" y="454" text-anchor="middle">{CertificateVerify}</text>
+          <text class="t-sub" x="530" y="486" text-anchor="middle">지금까지의 대화 전체를 개인키로 ECDSA 서명 → 신원 증명</text>
+
+          <circle class="step-ring" cx="32" cy="520" r="13"></circle>
+          <text class="t-step" x="32" y="524" text-anchor="middle">6</text>
+          <line class="enc" x1="860" y1="520" x2="206" y2="520" marker-end="url(#he)"></line>
+          <text class="t-msg" x="530" y="510" text-anchor="middle">{Finished}</text>
+          <text class="t-sub" x="530" y="542" text-anchor="middle">핸드셰이크 무결성 HMAC — 중간에 변조되면 여기서 실패</text>
+
+          <circle class="step-ring" cx="32" cy="572" r="13"></circle>
+          <text class="t-step" x="32" y="576" text-anchor="middle">7</text>
+          <line class="enc" x1="200" y1="572" x2="854" y2="572" marker-end="url(#he)"></line>
+          <text class="t-msg" x="530" y="562" text-anchor="middle">{Finished}</text>
+
+          <!-- app key switch -->
+          <line class="cut2" x1="60" y1="600" x2="1000" y2="600"></line>
+          <text class="t-enc" x="992" y="592" text-anchor="end">애플리케이션 키로 전환</text>
+
+          <circle class="step-ring" cx="32" cy="654" r="13"></circle>
+          <text class="t-step" x="32" y="658" text-anchor="middle">8</text>
+          <line class="enc" x1="200" y1="654" x2="854" y2="654" marker-end="url(#he)"></line>
+          <text class="t-msg" x="530" y="644" text-anchor="middle">[ HTTP/2 요청 ]</text>
+          <text class="t-sub" x="530" y="676" text-anchor="middle">메서드 · 경로 · 헤더 · 쿠키 · 본문 — 전부 암호문</text>
+
+          <circle class="step-ring" cx="32" cy="722" r="13"></circle>
+          <text class="t-step" x="32" y="726" text-anchor="middle">9</text>
+          <line class="enc" x1="860" y1="722" x2="206" y2="722" marker-end="url(#he)"></line>
+          <text class="t-msg" x="530" y="712" text-anchor="middle">[ HTTP/2 응답 ]</text>
+          <text class="t-sub" x="530" y="744" text-anchor="middle">502 Bad Gateway — 응답 내용도 도청자는 못 읽는다</text>
+
+          <text class="t-note" x="76" y="784">1왕복(1-RTT)이면 데이터 전송 시작 · TLS 1.2 는 2왕복 + 인증서가 평문이었다</text>
+
+          <!-- right: key state -->
+          <rect class="note" x="1016" y="126" width="210" height="72" rx="4"></rect>
+          <text class="t-note" x="1032" y="150">공유 키 없음</text>
+          <text class="t-note" x="1032" y="170">이 두 통은 누구나</text>
+          <text class="t-note" x="1032" y="190">읽을 수 있다</text>
+
+          <rect class="note" x="1016" y="326" width="210" height="128" rx="4"></rect>
+          <text class="t-enc"  x="1032" y="350">키 도출</text>
+          <text class="t-note" x="1032" y="374">두 임시 공개키로</text>
+          <text class="t-note" x="1032" y="394">ECDHE 공유 비밀 계산</text>
+          <text class="t-note" x="1032" y="418">↓ HKDF-SHA384</text>
+          <text class="t-note" x="1032" y="442">핸드셰이크 키 확보</text>
+
+          <rect class="note" x="1016" y="620" width="210" height="104" rx="4"></rect>
+          <text class="t-enc"  x="1032" y="644">키 교체</text>
+          <text class="t-note" x="1032" y="668">핸드셰이크 키 폐기</text>
+          <text class="t-note" x="1032" y="692">애플리케이션 키로</text>
+          <text class="t-note" x="1032" y="712">AES-256-GCM 암·복호</text>
+
+          <!-- legend -->
+          <line class="plain" x1="80" y1="856" x2="128" y2="856"></line>
+          <text class="t-note" x="138" y="860">평문</text>
+          <line class="enc" x1="220" y1="856" x2="268" y2="856"></line>
+          <text class="t-note" x="278" y="860">암호문</text>
+          <text class="t-note" x="380" y="860">{ } = 핸드셰이크 키로 암호화</text>
+          <text class="t-note" x="660" y="860">[ ] = 애플리케이션 키로 암호화</text>
+        </svg>
+      </div>
+      <figcaption>
+        평문으로 오가는 건 <b>처음 두 통뿐</b>이고, 그마저도 실제 비밀은 담고 있지 않다. 오간 것은 <b>임시 공개키</b>이고 진짜 키는 양쪽이 각자 계산해낸다 — 그래서 전부 도청해도 세션 키는 얻지 못한다. 다만 <code>SNI</code>는 인증서를 고르기 위해 암호화 전에 필요하므로 끝까지 평문으로 남는다.
+      </figcaption>
+    </figure>
+  </section>
+
+</div>
