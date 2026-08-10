@@ -5,10 +5,17 @@ name: deploy
 # =========================
 env:
   IMAGE_REPOSITORY: p-14044-1        # GHCR 이미지 이름 (소유자 제외)
-  CONTAINER_1_NAME: p-14044-1_1      # 배포 대상 컨테이너 이름
-  EC2_INSTANCE_TAG_NAME: terra-ec2-1 # 배포 대상 EC2 의 Name 태그
-  DOCKER_NETWORK: common             # 도커 네트워크
-  BACKEND_DIR: back                  # Dockerfile 위치 (강의는 backend)
+  CONTAINER_1_NAME: p-14044-1_1      # 슬롯 1 (고정 이름)
+  CONTAINER_2_NAME: p-14044-1_2      # 슬롯 2 (고정 이름)
+  CONTAINER_PORT: 8080               # 컨테이너 내부 포트
+  EC2_INSTANCE_TAG_NAME: terra-ec2-1
+  DOCKER_NETWORK: common
+  BACKEND_DIR: back
+
+# 커밋이 몰려도 배포는 하나씩. 진행 중인 배포는 끝까지 보장
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 on:
   push:
@@ -21,10 +28,9 @@ on:
     branches:
       - main
 
-# 이 워크플로가 실제로 쓰는 권한만 선언
 permissions:
-  contents: write # 태그 / 릴리즈
-  packages: write # GHCR 푸시
+  contents: write
+  packages: write
 
 defaults:
   run:
@@ -42,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # 태그 히스토리 전체가 있어야 버전 계산이 맞는다
+          fetch-depth: 0
 
       - name: 버전 태그 생성
         id: create_tag
@@ -103,10 +109,10 @@ jobs:
             ghcr.io/${{ env.OWNER_LC }}/${{ env.IMAGE_REPOSITORY }}:latest
 
   # ---------------------------------------------------------
-  # 3) 배포 (SSM 원격 실행)
+  # 3) Blue/Green 무중단 배포
   # ---------------------------------------------------------
   deploy:
-    name: 배포
+    name: Blue/Green 무중단 배포
     needs: [makeTagAndRelease, buildImageAndPush]
     runs-on: ubuntu-latest
     steps:
@@ -136,13 +142,15 @@ jobs:
           OWNER_LC="${OWNER,,}"
           PREFIX="ghcr.io/${OWNER_LC}/${{ env.IMAGE_REPOSITORY }}"
           {
-            # --- 앞부분: 러너에서 값이 치환되는 구간 ---
+            # --- 러너에서 값이 치환되는 구간 ---
             echo "IMAGE='${PREFIX}:${IMAGE_TAG}'"
             echo "IMAGE_PREFIX='${PREFIX}'"
             echo "IMAGE_TAG='${IMAGE_TAG}'"
-            echo "CONTAINER='${{ env.CONTAINER_1_NAME }}'"
+            echo "SLOT1='${{ env.CONTAINER_1_NAME }}'"
+            echo "SLOT2='${{ env.CONTAINER_2_NAME }}'"
+            echo "PORT_IN='${{ env.CONTAINER_PORT }}'"
             echo "NET='${{ env.DOCKER_NETWORK }}'"
-            # --- 뒷부분: EC2 에서 그대로 실행될 구간 ---
+            # --- EC2 에서 그대로 실행될 구간 ---
             cat <<'SCRIPT'
           set -Eeuo pipefail
 
@@ -150,20 +158,90 @@ jobs:
           exec > >(awk '{ fflush(); print strftime("[%Y-%m-%d %H:%M:%S]"), $0 }' | tee -a "$LOG")
           exec 2>&1
 
+          source /etc/environment || true
+          NPM="https://127.0.0.1:81"
+          JAR="$(mktemp)"
+          trap 'rm -f "$JAR"' EXIT
+
           echo "배포 이미지: ${IMAGE}"
           docker pull "${IMAGE}"
 
-          docker stop "${CONTAINER}" || true
-          docker rm   "${CONTAINER}" || true
+          # ---- 1) npmplus 로그인 : 토큰은 HttpOnly 쿠키로 온다 ----
+          HTTP=$(curl -sk -c "$JAR" -o /dev/null -w '%{http_code}' \
+            -X POST "${NPM}/api/tokens" \
+            -H "Content-Type: application/json" \
+            -d "{\"identity\":\"admin@npm.com\",\"secret\":\"${PASSWORD_1:-}\"}")
+          [ "$HTTP" = "200" ] || { echo "NPM 로그인 실패 (HTTP $HTTP)"; exit 1; }
+          grep -q 'Http-token' "$JAR" || { echo "NPM 토큰 쿠키를 받지 못했습니다"; exit 1; }
 
-          docker run -d \
+          # ---- 2) 대상 프록시 호스트 찾기 ----
+          [ -n "${APP_1_DOMAIN:-}" ] || { echo "APP_1_DOMAIN 이 비어 있습니다"; exit 1; }
+          PROXY_ID=$(curl -sk -b "$JAR" "${NPM}/api/nginx/proxy-hosts" \
+            | jq -r --arg d "$APP_1_DOMAIN" '.[] | select(.domain_names[]==$d) | .id')
+          [ -n "$PROXY_ID" ] && [ "$PROXY_ID" != "null" ] \
+            || { echo "프록시 호스트를 찾지 못했습니다: $APP_1_DOMAIN"; exit 1; }
+
+          CURRENT=$(curl -sk -b "$JAR" "${NPM}/api/nginx/proxy-hosts/${PROXY_ID}" \
+            | jq -r '.forward_host')
+          echo "현재 업스트림: ${CURRENT}"
+
+          # ---- 3) blue(현재) / green(다음) 역할 판정 ----
+          if [ "$CURRENT" = "$SLOT1" ]; then
+            BLUE="$SLOT1"; GREEN="$SLOT2"
+          elif [ "$CURRENT" = "$SLOT2" ]; then
+            BLUE="$SLOT2"; GREEN="$SLOT1"
+          else
+            BLUE="none";  GREEN="$SLOT1"
+          fi
+          echo "blue(현재)=${BLUE}   green(다음)=${GREEN}"
+
+          # ---- 4) green 컨테이너 기동 ----
+          docker rm -f "$GREEN" >/dev/null 2>&1 || true
+          docker run -d --name "$GREEN" \
             --restart unless-stopped \
-            --network "${NET}" \
-            --name "${CONTAINER}" \
+            --network "$NET" \
             -e TZ=Asia/Seoul \
-            "${IMAGE}"
+            "$IMAGE"
 
-          # 현재 태그와 latest 를 제외한 옛 이미지 정리
+          # ---- 5) 헬스체크 : 200 나올 때까지 대기 ----
+          echo "헬스체크 시작: ${GREEN}"
+          TIMEOUT=180; INTERVAL=3; ELAPSED=0; CODE=000
+          sleep 10
+          while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+            CODE=$(docker exec "$GREEN" curl -s -o /dev/null -w '%{http_code}' \
+                  "http://127.0.0.1:${PORT_IN}/actuator/health" 2>/dev/null || echo 000)
+            [ "$CODE" = "200" ] && break
+            sleep "$INTERVAL"; ELAPSED=$((ELAPSED + INTERVAL))
+          done
+          if [ "$CODE" != "200" ]; then
+            echo "헬스체크 실패(${CODE}) - 전환하지 않고 중단합니다. ${BLUE} 가 계속 서비스합니다"
+            docker logs --tail=200 "$GREEN" || true
+            docker rm -f "$GREEN" || true
+            exit 1
+          fi
+          echo "green 정상 (${ELAPSED}초 소요)"
+
+          # ---- 6) 업스트림 전환 : 기존 설정을 보존한 채 forward_host 만 교체 ----
+          CUR_JSON=$(curl -sk -b "$JAR" "${NPM}/api/nginx/proxy-hosts/${PROXY_ID}")
+          NEW_JSON=$(echo "$CUR_JSON" | jq --arg h "$GREEN" --argjson p "$PORT_IN" \
+            'del(.id, .created_on, .modified_on, .owner_user_id)
+             | .forward_host = $h
+             | .forward_port = $p')
+          RESP=$(curl -sk -b "$JAR" -X PUT "${NPM}/api/nginx/proxy-hosts/${PROXY_ID}" \
+            -H "Content-Type: application/json" -d "$NEW_JSON")
+          AFTER=$(echo "$RESP" | jq -r '.forward_host // empty')
+          [ "$AFTER" = "$GREEN" ] || { echo "업스트림 전환 실패: $RESP"; exit 1; }
+          echo "업스트림 전환 완료 -> ${GREEN}:${PORT_IN}"
+
+          # ---- 7) 이전 blue 제거 ----
+          if [ "$BLUE" != "none" ]; then
+            sleep 5
+            docker stop "$BLUE" >/dev/null 2>&1 || true
+            docker rm   "$BLUE" >/dev/null 2>&1 || true
+            echo "이전 blue 제거: ${BLUE}"
+          fi
+
+          # ---- 8) 옛 이미지 정리 ----
           {
             docker images --format '{{.Repository}}:{{.Tag}}' \
               | grep -F "${IMAGE_PREFIX}:" \
@@ -172,7 +250,7 @@ jobs:
               | xargs -r docker rmi
           } || true
 
-          echo "배포 완료: ${CONTAINER} <- ${IMAGE}"
+          echo "배포 완료. 현재 서비스 중 = ${GREEN}"
           SCRIPT
           } > /tmp/deploy.sh
 
@@ -183,8 +261,9 @@ jobs:
           CMD_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --comment "Deploy ${{ needs.makeTagAndRelease.outputs.tag_name }}" \
+            --comment "BlueGreen ${{ needs.makeTagAndRelease.outputs.tag_name }}" \
             --parameters file:///tmp/params.json \
+            --timeout-seconds 600 \
             --query "Command.CommandId" --output text)
           echo "CommandId: $CMD_ID"
 
