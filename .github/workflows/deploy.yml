@@ -221,12 +221,12 @@ jobs:
           fi
           echo "green 정상 (${ELAPSED}초 소요)"
 
-          # ---- 6) 업스트림 전환 : 기존 설정을 보존한 채 forward_host 만 교체 ----
-          CUR_JSON=$(curl -sk -b "$JAR" "${NPM}/api/nginx/proxy-hosts/${PROXY_ID}")
-          NEW_JSON=$(echo "$CUR_JSON" | jq --arg h "$GREEN" --argjson p "$PORT_IN" \
-            'del(.id, .created_on, .modified_on, .owner_user_id)
-             | .forward_host = $h
-             | .forward_port = $p')
+          # ---- 6) 업스트림 전환 ----
+          # npmplus 의 PUT 스키마는 additionalProperties:false 라서 전체 객체를 되돌려 보내면
+          # 400 "data must NOT have additional properties" 로 거부된다.
+          # 두 필드만 보내면 나머지(인증서·SSL·HTTP2/3 설정)는 서버가 그대로 유지한다.
+          NEW_JSON=$(jq -n --arg h "$GREEN" --argjson p "$PORT_IN" \
+            '{forward_host:$h, forward_port:$p}')
           RESP=$(curl -sk -b "$JAR" -X PUT "${NPM}/api/nginx/proxy-hosts/${PROXY_ID}" \
             -H "Content-Type: application/json" -d "$NEW_JSON")
           AFTER=$(echo "$RESP" | jq -r '.forward_host // empty')
